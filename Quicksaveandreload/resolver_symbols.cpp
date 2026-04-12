@@ -27,6 +27,8 @@ struct SymbolDef {
     ResolveMode mode;
     std::uintptr_t known_rva;
     std::array<const char*, 3> patterns;
+    bool rip_relative_target;
+    std::uint8_t rip_relative_offset;
 };
 
 struct SymbolState {
@@ -56,6 +58,11 @@ constexpr const char* kAobSavePrecheckStrict =
 constexpr const char* kAobSavePrecheckRelaxed =
     "48 89 5C 24 10 48 89 74 24 20 48 89 4C 24 08 57 48 83 EC 20 4C 89 C7 48 89 D3 49 8D 50 08 31 F6 4D 85 C0 48 0F 44 D6 "
     "48 8B 12 48 8D 4C 24 40 E8 ?? ?? ?? ?? 90 E8 ?? ?? ?? ??";
+
+constexpr const char* kAobWeatherTickAnchorStrict =
+    "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 88 D8 0E 00 00";
+constexpr const char* kAobWeatherTickAnchorRelaxed =
+    "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40";
 
 constexpr const char* kAobSaveServiceDriverStrict =
     "48 89 4C 24 08 53 55 56 57 41 56 48 83 EC 60 48 89 D3 48 8B 02 48 8D 94 24 A0 00 00 00 "
@@ -101,19 +108,19 @@ constexpr const char* kAobLoadModalHandlerRelaxed =
     "48 89 5C 24 18 48 89 74 24 20 55 57 41 56 48 8B EC 48 83 EC 60 49 8B F1 48 8B F9 45 33 F6 48 8B 99 70 01 00 00 48 3B DA";
 
 constexpr const char* kAobGameServiceGlobalStrict =
-    "70 A3 78 A3 80 A3 88 A3 90 A3 98 A3 A0 A3 A8 A3 B0 A3 B8 A3 C0 A3 C8 A3 D0 A3 D8 A3 E0 A3 E8 A3";
+    "48 83 EC 28 48 8B 0D ?? ?? ?? ?? 48 8B 49 50 E8 ?? ?? ?? ?? 84 C0 0F 94 C0 48 83 C4 28 C3";
 constexpr const char* kAobGameServiceGlobalRelaxed =
-    "70 A3 78 A3 80 A3 88 A3 90 A3 98 A3 A0 A3 A8 A3";
+    "48 83 EC 28 48 8B 0D ?? ?? ?? ?? 48 8B 49 50 E8 ?? ?? ?? ?? 84 C0";
 
 constexpr const char* kAobGameStateGlobalStrict =
-    "D0 A4 D8 A4 E0 A4 E8 A4 F0 A4 F8 A4 00 A5 08 A5 10 A5 18 A5 20 A5 28 A5 30 A5 38 A5 40 A5 48 A5";
+    "48 83 EC 28 E8 ?? ?? ?? ?? 48 85 C0 74 ?? 80 38 00 74 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 51 68 48 8B 4A 60 48 8B D0 48 8B 09 E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 88 A8 00 00 00 48 85 C9 74 ?? 48 8B 49 10 48 83 C4 28 E9 ?? ?? ?? ?? 48 83 C4 28 E9 ?? ?? ?? ?? 48 83 C4 28 C3";
 constexpr const char* kAobGameStateGlobalRelaxed =
-    "D0 A4 D8 A4 E0 A4 E8 A4 F0 A4 F8 A4 00 A5 08 A5";
+    "48 83 EC 28 E8 ?? ?? ?? ?? 48 85 C0 74 ?? 80 38 00 74 ?? 48 8B 0D ?? ?? ?? ?? 48 8B 51 68 48 8B 4A 60 48 8B D0 48 8B 09 E8 ?? ?? ?? ?? 48 85 C0 74 ?? 48 8B 88 A8 00 00 00 48 85 C9 74 ?? 48 8B 49 10 48 83 C4 28 E9 ?? ?? ?? ?? 48 83 C4 28 E9 ?? ?? ?? ?? 48 83 C4 28 C3";
 
 constexpr const char* kAobSaveManagerGlobalStrict =
-    "90 A1 98 A1 A0 A1 A8 A1 B0 A1 B8 A1 C0 A1 C8 A1 D0 A1 D8 A1 E0 A1 E8 A1 F0 A1 F8 A1 00 A2 08 A2";
+    "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B F1 E8 ?? ?? ?? ?? 48 C7 86 A0 00 00 00 00 00 00 00 48 8B 05 ?? ?? ?? ?? 48 8B 38";
 constexpr const char* kAobSaveManagerGlobalRelaxed =
-    "90 A1 98 A1 A0 A1 A8 A1 B0 A1 B8 A1 C0 A1 C8 A1";
+    "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B F1 E8 ?? ?? ?? ?? 48 C7 86 A0 00 00 00 00 00 00 00 48 8B 05 ?? ?? ?? ?? 48 8B 38";
 
 constexpr const char* kAobRenderSlotRowStrict =
     "48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B8 EE FF FF B8 48 12 00 00 "
@@ -141,7 +148,8 @@ constexpr const char* kAobAcquireClientActorScopeStrict =
     "48 89 5C 24 08 48 89 74 24 18 48 89 7C 24 20 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC 90 00 00 00 "
     "4C 8B F2 4C 8B E9 33 FF 8B F7 89 7D C7 48 8B 82 A0 00 00 00 48 85 C0 74 ?? 8B 50 60";
 constexpr const char* kAobAcquireClientActorScopeRelaxed =
-    "48 89 5C 24 08 48 89 74 24 18 48 89 7C 24 20 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC 90 00 00 00";
+    "48 89 5C 24 08 48 89 74 24 18 48 89 7C 24 20 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC 90 00 00 00 "
+    "4C 8B F2 4C 8B E9 33 FF 8B F7 89 7D C7 48 8B 82 A0 00 00 00 48 85 C0 74 ?? 8B 50 60";
 
 constexpr const char* kAobAcquireClientUserActorScopeStrict =
     "48 89 5C 24 08 48 89 54 24 10 57 48 83 EC 50 48 8B DA 48 8B F9 C7 44 24 20 00 00 00 00 "
@@ -156,18 +164,19 @@ constexpr const char* kAobScopeSpecialReleaseRelaxed =
     "40 57 48 83 EC 70 48 8B F9 84 D2 0F 85 ?? ?? ?? ?? 48 89 5C 24 68 48 89 8C 24 90 00 00 00";
 
 constexpr std::array<SymbolDef, static_cast<std::size_t>(SymbolId::Count)> kSymbols{{
-    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1113B390, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
+    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1108C490, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
     {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x0CB07FD0, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
-    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x111C4B30, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
+    {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x034A02DF, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
+    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1111D6F0, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
     {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x11046960, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
-    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08D7C9A0, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
-    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3E2C0, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
+    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08BEE030, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
+    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3E3D0, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
     {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3DC60, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
-    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3EFF0, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
-    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3F550, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
-    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x05D2AEE8, {nullptr, nullptr, nullptr}},
-    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::StaticRva, 0x05D2AF40, {nullptr, nullptr, nullptr}},
-    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x05D2B278, {nullptr, nullptr, nullptr}},
+    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3F100, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
+    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3F660, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
+    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x002C0D10, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
+    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x00A235A0, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
+    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x02111B40, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
     {SymbolId::RenderSlotRow, "RenderSlotRow", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3FC20, {kAobRenderSlotRowStrict, kAobRenderSlotRowRelaxed, nullptr}},
     {SymbolId::ResolveUiScript, "ResolveUiScript", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x033F0710, {kAobResolveUiScriptStrict, kAobResolveUiScriptRelaxed, nullptr}},
     {SymbolId::SetControlText, "SetControlText", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x033EC7E0, {kAobSetControlTextStrict, kAobSetControlTextRelaxed, nullptr}},
@@ -412,6 +421,16 @@ bool ReadToastBridgeFields(std::uintptr_t site, std::uint32_t& outer_offset, std
     }
 }
 
+std::uintptr_t ResolveAddressFromMatch(const SymbolDef& def, std::uintptr_t match) {
+    if (match == 0) {
+        return 0;
+    }
+    if (!def.rip_relative_target) {
+        return match;
+    }
+    return ReadRipRelative(match + def.rip_relative_offset);
+}
+
 std::uintptr_t ResolveSymbol(const SymbolDef& def) {
     auto& state = g_symbols[static_cast<std::size_t>(def.id)];
     state = {};
@@ -436,9 +455,12 @@ std::uintptr_t ResolveSymbol(const SymbolDef& def) {
         }
         const ScanStats stats = ScanImage(bytes, mask, def.mode);
         if (stats.hits == 1 && stats.first != 0) {
-            state.address = stats.first;
+            state.address = ResolveAddressFromMatch(def, stats.first);
             state.matched_pattern = static_cast<std::uint8_t>(i + 1);
-            state.resolved = true;
+            state.resolved = state.address != 0;
+            if (!state.resolved) {
+                continue;
+            }
             Logf("[AOB] %-24s mode=aob pattern=%u fallback=0 addr=%p\n",
                  def.name,
                  static_cast<unsigned>(state.matched_pattern),
@@ -457,9 +479,15 @@ std::uintptr_t ResolveSymbol(const SymbolDef& def) {
         const auto [bytes, mask] = ParsePattern(def.patterns[0]);
         const std::uintptr_t fallback = g_base + def.known_rva;
         if (MatchAt(fallback, bytes, mask)) {
-            state.address = fallback;
+            state.address = ResolveAddressFromMatch(def, fallback);
             state.used_known_fallback = true;
-            state.resolved = true;
+            state.resolved = state.address != 0;
+            if (!state.resolved) {
+                Logf("[AOB] %-24s fallback-rip-read-failed rva=0x%llX\n",
+                     def.name,
+                     static_cast<unsigned long long>(def.known_rva));
+                return 0;
+            }
             Logf("[AOB] %-24s mode=aob pattern=0 fallback=1 addr=%p rva=0x%llX\n",
                  def.name,
                  reinterpret_cast<void*>(state.address),

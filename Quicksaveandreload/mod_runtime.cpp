@@ -37,13 +37,21 @@ constexpr std::ptrdiff_t kRootOffsetActiveModal = 0x188;
 constexpr std::ptrdiff_t kRootOffsetVisibleMap = 0x198;
 constexpr std::ptrdiff_t kRootOffsetVisibleCount = 0x1A0;
 constexpr std::ptrdiff_t kRootOffsetMode = 0x1B8;
+constexpr std::ptrdiff_t kUiSystemRootOffsetManager = 0xA8;
+constexpr std::ptrdiff_t kUiManagerRootGameDataLoadListOffset = 0x758;
+constexpr std::ptrdiff_t kUiManagerRootTitleListOffset = 0x788;
+constexpr std::ptrdiff_t kUiManagerVectorDataOffset = 0x38;
+constexpr std::ptrdiff_t kUiManagerVectorCountOffset = 0x40;
 constexpr std::ptrdiff_t kModalOffsetSlotItem = 0x120;
 constexpr std::ptrdiff_t kRowOffsetTypeText = 0x340;
 constexpr std::ptrdiff_t kRowOffsetIndexName = 0x348;
 constexpr DWORD kHotkeyPollIntervalMs = 25;
 constexpr DWORD kHotkeyCooldownMs = 350;
+constexpr DWORD kGameplayReadyDelayMs = 5000;
 constexpr UINT kMsgQuickSave = WM_APP + 0x510;
 constexpr UINT kMsgQuickLoad = WM_APP + 0x511;
+constexpr std::uintptr_t kUiSystemRootGlobalRva = 0x05D2AF40;
+constexpr std::uintptr_t kRootTitleHandleOpenLoadViewRva = 0x00CE3510;
 struct Config {
     bool enable_mod = true;
     bool log_enabled = false;
@@ -119,6 +127,11 @@ struct RuntimeState {
     std::atomic<bool> pending_quick_load{ false };
     std::atomic<bool> quick_save_active{ false };
     std::atomic<bool> quick_load_confirm_modal_active{ false };
+    std::atomic<bool> quick_actions_enabled{ false };
+    std::atomic<bool> gameplay_gate_armed{ true };
+    std::atomic<ULONGLONG> gameplay_ready_since_ms{ 0 };
+    std::atomic<ULONGLONG> gameplay_gate_last_tick_ms{ 0 };
+    std::atomic<ULONGLONG> gameplay_gate_stable_ms{ 0 };
     std::atomic<std::int32_t> quick_action_active{ static_cast<std::int32_t>(QuickActionKind::None) };
     ControllerSource controller_source = ControllerSource::None;
     WORD previous_controller_buttons = 0;
@@ -145,6 +158,15 @@ struct DirectSaveCallScratch {
     int out_result = 0;
 };
 
+struct ResolvedWorldEnv {
+    std::int64_t entity = 0;
+    std::int64_t weather_state = 0;
+    std::int64_t cloud_node = 0;
+    std::int64_t wind_node = 0;
+    std::int64_t particle_mgr = 0;
+    bool valid = false;
+};
+
 using XInputGetStateDynFn = DWORD(WINAPI*)(DWORD, XINPUT_STATE*);
 
 using LoadListEventFn =
@@ -156,6 +178,7 @@ using LoadModalHandlerFn = void(__fastcall*)(std::uint64_t*, std::int64_t, char,
 using RenderSlotRowFn = std::int64_t(__fastcall*)(std::uint64_t*, unsigned int*, char);
 using ResolveUiScriptFn = std::uint64_t(__fastcall*)(std::uint64_t, std::int64_t, char);
 using SetControlTextFn = std::int64_t(__fastcall*)(std::uint64_t, const void*);
+using RootTitleHandleOpenLoadViewFn = void(__fastcall*)(std::int64_t);
 using AcquireClientActorScopeFn = ClientActorScope* (__fastcall*)(std::int64_t, ClientActorScope*);
 using AcquireClientUserActorScopeFn = ClientActorScope* (__fastcall*)(std::int64_t, ClientActorScope*);
 using ScopeSpecialReleaseFn = char(__fastcall*)(void*);
@@ -178,6 +201,7 @@ RenderSlotRowFn g_render_slot_row_original = nullptr;
 ResolveUiScriptFn g_resolve_ui_script = nullptr;
 SetControlTextFn g_set_control_text = nullptr;
 SetControlTextFn g_set_control_text_original = nullptr;
+RootTitleHandleOpenLoadViewFn g_root_title_handle_open_load_view = nullptr;
 XInputGetStateDynFn g_xinput_get_state = nullptr;
 AcquireClientActorScopeFn g_acquire_client_actor_scope = nullptr;
 AcquireClientUserActorScopeFn g_acquire_client_user_actor_scope = nullptr;
@@ -193,10 +217,10 @@ std::ptrdiff_t g_native_toast_manager_offset = 0;
 SaveServiceDriverFn g_save_service_driver_original = nullptr;
 ServiceChildPollFn g_service_child_poll_original = nullptr;
 InGameMenuLoadCoreFn g_in_game_menu_load_core_original = nullptr;
+std::uint64_t* g_world_env_manager_global = nullptr;
 bool g_xinput_resolve_attempted = false;
 thread_local bool g_reserved_quick_row_text_override = false;
 thread_local std::uintptr_t g_reserved_quick_row_script = 0;
-std::atomic<int> g_quick_row_probe_budget{ 24 };
 
 constexpr std::size_t kRealLoadPacketCopySize = 0x60;
 constexpr std::size_t kRealLoadBlobSlotOffset = 13;
@@ -396,28 +420,6 @@ bool BuildPatchedLoginCharacterPacket(
     return available;
 }
 
-std::string FormatU16Preview(const std::uint16_t* values, std::uint32_t count, std::uint32_t max_items = 32) {
-    if (values == nullptr || count == 0) {
-        return {};
-    }
-
-    std::string text;
-    const std::uint32_t limit = count < max_items ? count : max_items;
-    char piece[32] = {};
-    for (std::uint32_t i = 0; i < limit; ++i) {
-        if (!text.empty()) {
-            text.append(", ");
-        }
-        std::snprintf(piece, sizeof(piece), "%u", static_cast<unsigned>(values[i]));
-        text.append(piece);
-    }
-    if (count > limit) {
-        std::snprintf(piece, sizeof(piece), " ... +%u", static_cast<unsigned>(count - limit));
-        text.append(piece);
-    }
-    return text;
-}
-
 void CacheLoginCharacterTemplate(
     std::int64_t self,
     std::uint64_t** actor_wrapper,
@@ -451,22 +453,6 @@ void CacheLoginCharacterTemplate(
     }
     ReleaseSRWLockExclusive(&g_state.cached_login_character_lock);
 
-    const std::string preview = FormatU16Preview(payload_data, payload_count);
-    Log("[login-char-cache] self=%p actor_pp=%p actor=%p mode=%u key=%p slot=%u payload_vec=%p payload_data=%p payload_count=%u copied=%u tid=%lu\n",
-        reinterpret_cast<void*>(self),
-        actor_wrapper,
-        actor_wrapper != nullptr ? reinterpret_cast<void*>(*actor_wrapper) : nullptr,
-        static_cast<unsigned>(static_cast<std::uint8_t>(mode)),
-        reinterpret_cast<void*>(key),
-        slot,
-        reinterpret_cast<void*>(payload_vec),
-        payload_data,
-        payload_count,
-        copy_count,
-        GetCurrentThreadId());
-    Log("[login-char-cache] payload_preview=[%s]%s\n",
-        preview.empty() ? "" : preview.c_str(),
-        payload_count > copy_count ? " (truncated in cache)" : "");
 }
 
 void ResolvePluginDir() {
@@ -794,29 +780,60 @@ void SyncResolvedToastBridge() {
     g_native_toast_release_string = reinterpret_cast<NativeToastReleaseStringFn>(bridge.release_string);
 }
 
+std::uintptr_t ReadRipRelativeAt(std::uintptr_t site) {
+    if (site == 0) {
+        return 0;
+    }
+    __try {
+        const auto displacement = *reinterpret_cast<const std::int32_t*>(site + 3);
+        return site + 7 + static_cast<std::intptr_t>(displacement);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
 bool ResolveDirectCalls() {
     g_render_slot_row = ResolveCall<RenderSlotRowFn>(resolver::SymbolId::RenderSlotRow);
     g_resolve_ui_script = ResolveCall<ResolveUiScriptFn>(resolver::SymbolId::ResolveUiScript);
     g_set_control_text = ResolveCall<SetControlTextFn>(resolver::SymbolId::SetControlText);
+    g_root_title_handle_open_load_view = reinterpret_cast<RootTitleHandleOpenLoadViewFn>(
+        reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr)) + kRootTitleHandleOpenLoadViewRva);
     g_acquire_client_actor_scope = ResolveCall<AcquireClientActorScopeFn>(resolver::SymbolId::AcquireClientActorScope);
     g_acquire_client_user_actor_scope = ResolveCall<AcquireClientUserActorScopeFn>(resolver::SymbolId::AcquireClientUserActorScope);
     g_scope_special_release = ResolveCall<ScopeSpecialReleaseFn>(resolver::SymbolId::ScopeSpecialRelease);
     g_save_precheck = ResolveCall<SavePrecheckFn>(resolver::SymbolId::SavePrecheck);
+    g_world_env_manager_global = nullptr;
+    const std::uintptr_t weather_tick_anchor = resolver::Address(resolver::SymbolId::WeatherTickAnchor);
+    if (weather_tick_anchor != 0) {
+        const std::uintptr_t env_site = weather_tick_anchor + 5;
+        __try {
+            if (*reinterpret_cast<const std::uint8_t*>(env_site) == 0x48) {
+                g_world_env_manager_global = reinterpret_cast<std::uint64_t*>(ReadRipRelativeAt(env_site));
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            g_world_env_manager_global = nullptr;
+        }
+    }
 
     const bool ok = g_render_slot_row != nullptr && g_resolve_ui_script != nullptr && g_set_control_text != nullptr
+        && g_root_title_handle_open_load_view != nullptr
         && g_acquire_client_actor_scope != nullptr && g_acquire_client_user_actor_scope != nullptr
         && g_scope_special_release != nullptr;
     if (!ok) {
-        Log("[E] Failed to resolve direct helpers render=%p resolve=%p set_text=%p acquire_actor_scope=%p acquire_user_scope=%p special_release=%p\n",
+        Log("[E] Failed to resolve direct helpers render=%p resolve=%p set_text=%p open_load_view=%p acquire_actor_scope=%p acquire_user_scope=%p special_release=%p\n",
             reinterpret_cast<void*>(g_render_slot_row),
             reinterpret_cast<void*>(g_resolve_ui_script),
             reinterpret_cast<void*>(g_set_control_text),
+            reinterpret_cast<void*>(g_root_title_handle_open_load_view),
             reinterpret_cast<void*>(g_acquire_client_actor_scope),
             reinterpret_cast<void*>(g_acquire_client_user_actor_scope),
             reinterpret_cast<void*>(g_scope_special_release));
     }
     if (g_save_precheck == nullptr) {
         Log("[W] Save precheck helper unavailable; quick-save invalid-state filtering disabled\n");
+    }
+    if (g_world_env_manager_global == nullptr) {
+        Log("[W] World env manager helper unavailable; transition gate will use native-ready only\n");
     }
     return ok;
 }
@@ -828,8 +845,13 @@ void ReleaseClientActorScope(ClientActorScope& scope);
 std::uintptr_t ResolveInGameLoadCoreFromService();
 std::uintptr_t ResolveQuickSaveActor();
 DWORD ResolveQuickSaveThreadId();
+bool PassesNativeQuickActionReadyCheck(unsigned* out_code);
+ResolvedWorldEnv ResolveWorldEnv();
+void ArmGameplayActionGate(const char* reason);
+void TickGameplayActionGateOnGameThread();
 void CacheLoadUiRoot(std::int64_t root, const char* source);
 bool IsLikelyLoadUiRoot(std::int64_t root);
+std::int64_t ResolveLiveQuickLoadUiRoot(const char* source);
 bool TryOpenQuickLoadConfirmationModal(const char* source);
 std::uint32_t GetVisibleCount(std::int64_t root);
 int* GetVisibleMap(std::int64_t root);
@@ -847,30 +869,6 @@ int FindRecordIndexBySlot(int slot_id);
 void InvokeQuickSave(const char* source);
 bool InvokeQuickLoadViaInGameCore(const char* source);
 void SetRowControlText(std::uint64_t row_script, std::ptrdiff_t offset, const char* text);
-
-void LogBytesPreview(const char* label, const void* ptr, std::size_t size) {
-    if (!g_state.config.log_enabled || label == nullptr) {
-        return;
-    }
-
-    if (ptr == nullptr) {
-        Log("[%s] <null>\n", label);
-        return;
-    }
-
-    const auto* bytes = reinterpret_cast<const std::uint8_t*>(ptr);
-    char line[128] = {};
-    std::size_t written = 0;
-    const std::size_t limit = size < 16 ? size : 16;
-    for (std::size_t i = 0; i < limit && written + 4 < std::size(line); ++i) {
-        const int count = std::snprintf(line + written, std::size(line) - written, "%02X%s", bytes[i], i + 1 < limit ? " " : "");
-        if (count <= 0) {
-            break;
-        }
-        written += static_cast<std::size_t>(count);
-    }
-    Log("[%s] ptr=%p bytes[%zu]=%s\n", label, ptr, limit, line);
-}
 
 void LogSaveManagerState(const char* label, std::int64_t manager) {
     if (!g_state.config.log_enabled || label == nullptr || manager == 0) {
@@ -1238,6 +1236,11 @@ void QueueQuickCommand(UINT message, const char* source) {
         return;
     }
 
+    if (!g_state.quick_actions_enabled.load()) {
+        Log("[queue] source=%s message=0x%X unavailable transition-lock\n", source, message);
+        return;
+    }
+
     if (g_state.quick_load_confirm_modal_active.load()) {
         Log("[queue] source=%s message=0x%X unavailable busy active=load-confirm-modal\n", source, message);
         return;
@@ -1489,6 +1492,7 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
 
     std::int32_t out_result = 0;
     std::int64_t target_key = static_cast<std::int64_t>(key);
+    ArmGameplayActionGate("quick-load-dispatch");
     std::int32_t* result =
         g_in_game_menu_load_core_original(self, &out_result, &target_key, static_cast<unsigned int>(g_state.config.quick_slot_id));
     Log("[quick-load] source=%s path=in-game-load-core slot=%d out=%d success=%d\n",
@@ -1552,23 +1556,28 @@ bool AcquireLiveClientActorScope(ClientActorScope& out_scope) {
         return false;
     }
 
-    const std::uint64_t game_state = GetGameState();
-    if (game_state == 0) {
+    __try {
+        const std::uint64_t game_state = GetGameState();
+        if (game_state == 0) {
+            return false;
+        }
+
+        const std::uint64_t client_state = *reinterpret_cast<const std::uint64_t*>(game_state + 72);
+        if (client_state == 0) {
+            return false;
+        }
+
+        const std::uint64_t scope_source = *reinterpret_cast<const std::uint64_t*>(client_state + 40);
+        if (scope_source == 0) {
+            return false;
+        }
+
+        g_acquire_client_actor_scope(static_cast<std::int64_t>(scope_source), &out_scope);
+        return out_scope.object != nullptr && out_scope.valid != 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        std::memset(&out_scope, 0, sizeof(out_scope));
         return false;
     }
-
-    const std::uint64_t client_state = *reinterpret_cast<const std::uint64_t*>(game_state + 72);
-    if (client_state == 0) {
-        return false;
-    }
-
-    const std::uint64_t scope_source = *reinterpret_cast<const std::uint64_t*>(client_state + 40);
-    if (scope_source == 0) {
-        return false;
-    }
-
-    g_acquire_client_actor_scope(static_cast<std::int64_t>(scope_source), &out_scope);
-    return out_scope.object != nullptr && out_scope.valid != 0;
 }
 
 bool AcquireLiveClientUserActorScope(ClientActorScope& out_scope) {
@@ -1578,19 +1587,24 @@ bool AcquireLiveClientUserActorScope(ClientActorScope& out_scope) {
         return false;
     }
 
-    const auto* service_global = reinterpret_cast<const std::uint64_t*>(resolver::Address(resolver::SymbolId::GameServiceGlobal));
-    const std::uint64_t service_root = service_global != nullptr ? *service_global : 0;
-    if (service_root == 0) {
+    __try {
+        const auto* service_global = reinterpret_cast<const std::uint64_t*>(resolver::Address(resolver::SymbolId::GameServiceGlobal));
+        const std::uint64_t service_root = service_global != nullptr ? *service_global : 0;
+        if (service_root == 0) {
+            return false;
+        }
+
+        const std::uint64_t scope_source = *reinterpret_cast<const std::uint64_t*>(service_root + 0x30);
+        if (scope_source == 0) {
+            return false;
+        }
+
+        g_acquire_client_user_actor_scope(static_cast<std::int64_t>(scope_source), &out_scope);
+        return out_scope.object != nullptr && out_scope.valid != 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        std::memset(&out_scope, 0, sizeof(out_scope));
         return false;
     }
-
-    const std::uint64_t scope_source = *reinterpret_cast<const std::uint64_t*>(service_root + 0x30);
-    if (scope_source == 0) {
-        return false;
-    }
-
-    g_acquire_client_user_actor_scope(static_cast<std::int64_t>(scope_source), &out_scope);
-    return out_scope.object != nullptr && out_scope.valid != 0;
 }
 
 void ReleaseClientActorScope(ClientActorScope& scope) {
@@ -1626,13 +1640,17 @@ void ReleaseClientActorScope(ClientActorScope& scope) {
 }
 
 std::uintptr_t ResolveInGameLoadCoreFromService() {
-    const auto* service_global = reinterpret_cast<const std::uint64_t*>(resolver::Address(resolver::SymbolId::GameServiceGlobal));
-    const std::uint64_t service_root = service_global != nullptr ? *service_global : 0;
-    if (service_root == 0) {
+    __try {
+        const auto* service_global = reinterpret_cast<const std::uint64_t*>(resolver::Address(resolver::SymbolId::GameServiceGlobal));
+        const std::uint64_t service_root = service_global != nullptr ? *service_global : 0;
+        if (service_root == 0) {
+            return 0;
+        }
+
+        return static_cast<std::uintptr_t>(*reinterpret_cast<const std::uint64_t*>(service_root + 0xD0));
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
         return 0;
     }
-
-    return static_cast<std::uintptr_t>(*reinterpret_cast<const std::uint64_t*>(service_root + 0xD0));
 }
 
 std::uintptr_t ResolveQuickSaveActor() {
@@ -1649,6 +1667,124 @@ DWORD ResolveQuickSaveThreadId() {
         return direct_tid;
     }
     return g_state.cached_service_save_thread_id.load();
+}
+
+bool PassesNativeQuickActionReadyCheck(unsigned* out_code) {
+    if (out_code != nullptr) {
+        *out_code = 0;
+    }
+    if (g_save_precheck == nullptr) {
+        return true;
+    }
+
+    const std::uintptr_t actor = ResolveQuickSaveActor();
+    if (actor == 0) {
+        if (out_code != nullptr) {
+            *out_code = 0xFFFFFFFFu;
+        }
+        return false;
+    }
+
+    __try {
+        int precheck_result = 0;
+        int* precheck_status = g_save_precheck(0, &precheck_result, static_cast<std::int64_t>(actor));
+        if (out_code != nullptr) {
+            *out_code = static_cast<unsigned>(precheck_result);
+        }
+        return precheck_status != nullptr && precheck_result == 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        if (out_code != nullptr) {
+            *out_code = 0xFFFFFFFEu;
+        }
+        return false;
+    }
+}
+
+ResolvedWorldEnv ResolveWorldEnv() {
+    ResolvedWorldEnv env{};
+    if (g_world_env_manager_global == nullptr) {
+        return env;
+    }
+
+    __try {
+        const std::uint64_t env_mgr = *g_world_env_manager_global;
+        if (env_mgr == 0) {
+            return env;
+        }
+
+        const auto* vtable = *reinterpret_cast<std::uintptr_t* const*>(env_mgr);
+        if (vtable == nullptr) {
+            return env;
+        }
+
+        auto get_entity = reinterpret_cast<std::int64_t(__fastcall*)(void*)>(vtable[0x40 / 8]);
+        if (get_entity == nullptr) {
+            return env;
+        }
+
+        env.entity = get_entity(reinterpret_cast<void*>(env_mgr));
+        if (env.entity == 0) {
+            return env;
+        }
+
+        env.weather_state = *reinterpret_cast<std::int64_t*>(env.entity + 0xED8);
+        if (env.weather_state == 0) {
+            return env;
+        }
+
+        const std::int64_t container = *reinterpret_cast<std::int64_t*>(env.weather_state + 0x50);
+        if (container == 0) {
+            return env;
+        }
+
+        env.cloud_node = *reinterpret_cast<std::int64_t*>(container + 0x18);
+        env.wind_node = *reinterpret_cast<std::int64_t*>(container + 0x20);
+        env.particle_mgr = *reinterpret_cast<std::int64_t*>(env.entity + 0xEE0);
+        env.valid = true;
+        return env;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return ResolvedWorldEnv{};
+    }
+}
+
+void ArmGameplayActionGate(const char* reason) {
+    g_state.quick_actions_enabled.store(false);
+    g_state.gameplay_gate_armed.store(true);
+    g_state.gameplay_ready_since_ms.store(0);
+    Log("[gate] armed reason=%s\n", reason != nullptr ? reason : "<null>");
+}
+
+void TickGameplayActionGateOnGameThread() {
+    if (!g_state.gameplay_gate_armed.load()) {
+        return;
+    }
+
+    unsigned native_ready_code = 0;
+    if (!PassesNativeQuickActionReadyCheck(&native_ready_code)) {
+        g_state.gameplay_ready_since_ms.store(0);
+        return;
+    }
+
+    const ResolvedWorldEnv env = ResolveWorldEnv();
+    if (!(env.valid && env.cloud_node != 0 && env.wind_node != 0 && env.particle_mgr != 0)) {
+        g_state.gameplay_ready_since_ms.store(0);
+        return;
+    }
+
+    const ULONGLONG now = GetTickCount64();
+    ULONGLONG ready_since = g_state.gameplay_ready_since_ms.load();
+    if (ready_since == 0) {
+        g_state.gameplay_ready_since_ms.store(now);
+        return;
+    }
+
+    if (now - ready_since < kGameplayReadyDelayMs) {
+        return;
+    }
+
+    g_state.quick_actions_enabled.store(true);
+    g_state.gameplay_gate_armed.store(false);
+    Log("[gate] enabled after %llums stable-ready\n", static_cast<unsigned long long>(now - ready_since));
 }
 
 const char* QuickActionKindToString(QuickActionKind kind) {
@@ -1718,8 +1854,123 @@ bool IsLikelyLoadUiRoot(std::int64_t root) {
     }
 }
 
+std::uint64_t GetUiSystemRoot() {
+    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
+    if (base == 0) {
+        return 0;
+    }
+
+    __try {
+        const auto* root_global = reinterpret_cast<const std::uint64_t*>(base + kUiSystemRootGlobalRva);
+        return root_global != nullptr ? *root_global : 0;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+std::uint64_t GetUiSystemManager() {
+    const std::uint64_t ui_root = GetUiSystemRoot();
+    if (ui_root == 0) {
+        return 0;
+    }
+
+    __try {
+        return *reinterpret_cast<const std::uint64_t*>(ui_root + kUiSystemRootOffsetManager);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+std::int64_t FindFirstRegisteredUiObject(std::uint64_t manager, std::ptrdiff_t list_offset) {
+    if (manager == 0) {
+        return 0;
+    }
+
+    __try {
+        const auto list = *reinterpret_cast<const std::uint64_t*>(manager + list_offset);
+        if (list == 0) {
+            return 0;
+        }
+
+        const auto count = *reinterpret_cast<const std::uint32_t*>(list + kUiManagerVectorCountOffset);
+        const auto entries = *reinterpret_cast<const std::uint64_t*>(list + kUiManagerVectorDataOffset);
+        if (count == 0 || entries == 0) {
+            return 0;
+        }
+
+        for (std::uint32_t index = 0; index < count; ++index) {
+            const auto entry = entries + static_cast<std::uint64_t>(index) * 24ULL;
+            const auto object = *reinterpret_cast<const std::uint64_t*>(entry);
+            if (object != 0) {
+                return static_cast<std::int64_t>(object);
+            }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+
+    return 0;
+}
+
+std::int64_t PrimeLiveQuickLoadUiRoot(std::int64_t root, const char* source) {
+    if (root == 0) {
+        return 0;
+    }
+
+    if (g_build_visible_map_original != nullptr) {
+        g_build_visible_map_original(root);
+        CacheLoadUiRoot(root, source);
+    }
+    if (IsLikelyLoadUiRoot(root)) {
+        CacheLoadUiRoot(root, source);
+        return root;
+    }
+    return 0;
+}
+
+std::int64_t ResolveLiveQuickLoadUiRoot(const char* source) {
+    const auto cached_root = static_cast<std::int64_t>(g_state.cached_load_ui_root.load());
+    if (IsLikelyLoadUiRoot(cached_root)) {
+        return cached_root;
+    }
+
+    const std::uint64_t manager = GetUiSystemManager();
+    if (manager == 0) {
+        Log("[quick-load-confirm] unavailable reason=no-ui-manager\n");
+        return 0;
+    }
+
+    auto root = FindFirstRegisteredUiObject(manager, kUiManagerRootGameDataLoadListOffset);
+    if (IsLikelyLoadUiRoot(root)) {
+        CacheLoadUiRoot(root, source);
+        return root;
+    }
+    root = PrimeLiveQuickLoadUiRoot(root, source);
+    if (IsLikelyLoadUiRoot(root)) {
+        return root;
+    }
+
+    const auto root_title = FindFirstRegisteredUiObject(manager, kUiManagerRootTitleListOffset);
+    if (root_title != 0 && g_root_title_handle_open_load_view != nullptr) {
+        __try {
+            g_root_title_handle_open_load_view(root_title);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            Log("[quick-load-confirm] unavailable reason=open-load-view-except\n");
+            return 0;
+        }
+
+        root = FindFirstRegisteredUiObject(manager, kUiManagerRootGameDataLoadListOffset);
+        root = PrimeLiveQuickLoadUiRoot(root, source);
+        if (IsLikelyLoadUiRoot(root)) {
+            CacheLoadUiRoot(root, source);
+            return root;
+        }
+    }
+
+    return 0;
+}
+
 bool TryOpenQuickLoadConfirmationModal(const char* source) {
-    (void)source;
     if (!g_state.config.quick_load_confirmation_enabled || g_load_selected_refresh_original == nullptr) {
         return false;
     }
@@ -1729,8 +1980,7 @@ bool TryOpenQuickLoadConfirmationModal(const char* source) {
         return true;
     }
 
-    const std::uintptr_t root_u = g_state.cached_load_ui_root.load();
-    const auto root = static_cast<std::int64_t>(root_u);
+    const auto root = ResolveLiveQuickLoadUiRoot(source);
     if (!IsLikelyLoadUiRoot(root)) {
         Log("[quick-load-confirm] unavailable reason=no-load-ui-root\n");
         return false;
@@ -2118,14 +2368,6 @@ std::int64_t __fastcall SetControlTextHook(std::uint64_t control, const void* te
     if (g_reserved_quick_row_text_override && g_reserved_quick_row_script != 0) {
         const std::uint64_t type_control = *reinterpret_cast<std::uint64_t*>(g_reserved_quick_row_script + kRowOffsetTypeText);
         if (control != 0 && control == type_control) {
-            const int budget_before = g_quick_row_probe_budget.fetch_sub(1);
-            if (budget_before > 0) {
-                Log("[quick-row-probe] SetControlText override row_script=%p control=%p type_control=%p incoming=%p text=Quick Save\n",
-                    reinterpret_cast<void*>(g_reserved_quick_row_script),
-                    reinterpret_cast<void*>(control),
-                    reinterpret_cast<void*>(type_control),
-                    text);
-            }
             text = "Quick Save";
         }
     }
@@ -2140,21 +2382,6 @@ std::int64_t __fastcall RenderSlotRowHook(std::uint64_t* row_script, unsigned in
     }
 
     if (row_script != nullptr && record != nullptr && static_cast<int>(record[0]) == g_state.config.quick_slot_id) {
-        const int budget_before = g_quick_row_probe_budget.fetch_sub(1);
-        if (budget_before > 0) {
-            const std::uint64_t row_script_u64 = reinterpret_cast<std::uint64_t>(row_script);
-            Log("[quick-row-probe] RenderSlotRow row_script=%p record=%p slot=%u flag=%d ctrl340=%p ctrl348=%p ctrl350=%p ctrl358=%p ctrl368=%p\n",
-                row_script,
-                record,
-                record[0],
-                static_cast<int>(flag),
-                reinterpret_cast<void*>(*reinterpret_cast<std::uint64_t*>(row_script_u64 + 0x340)),
-                reinterpret_cast<void*>(*reinterpret_cast<std::uint64_t*>(row_script_u64 + 0x348)),
-                reinterpret_cast<void*>(*reinterpret_cast<std::uint64_t*>(row_script_u64 + 0x350)),
-                reinterpret_cast<void*>(*reinterpret_cast<std::uint64_t*>(row_script_u64 + 0x358)),
-                reinterpret_cast<void*>(*reinterpret_cast<std::uint64_t*>(row_script_u64 + 0x368)));
-        }
-
         alignas(16) std::uint8_t shadow_record_bytes[kSaveRecordSize] = {};
         std::memcpy(shadow_record_bytes, record, kSaveRecordSize);
         auto* shadow_record = reinterpret_cast<unsigned int*>(shadow_record_bytes);
@@ -2228,6 +2455,7 @@ std::int32_t* __fastcall ServiceChildPollHook(std::int64_t self, std::int32_t* o
     const bool pending_quick_save = g_state.pending_quick_save.load();
     const std::uint32_t child_count = self != 0 ? *reinterpret_cast<const std::uint32_t*>(self + 128) : 0;
     const bool child_poll_active = self != 0 ? (*reinterpret_cast<const std::uint8_t*>(self + 148) != 0) : false;
+    TickGameplayActionGateOnGameThread();
     if (self != 0 && child_count == 46 && child_poll_active) {
         g_state.cached_service_save_actor.store(static_cast<std::uintptr_t>(self));
         g_state.cached_service_save_thread_id.store(tid);
@@ -2255,6 +2483,7 @@ std::int32_t* __fastcall InGameMenuLoadCoreHook(
     std::int32_t* out_result,
     std::int64_t* target_key,
     unsigned int slot) {
+    ArmGameplayActionGate("in-game-load-core");
     const auto key_value = target_key != nullptr ? static_cast<std::uint64_t>(*target_key) : 0;
     if (self != 0) {
         g_state.cached_in_game_load_core_self.store(static_cast<std::uintptr_t>(self));
@@ -2326,6 +2555,9 @@ void __fastcall LoadModalHandlerHook(std::uint64_t* self, std::int64_t source, c
     if (field49 != 0 && source_u64 == field49) {
         const bool was_active = g_state.quick_load_confirm_modal_active.exchange(false);
         Log("[quick-load-confirm] resolved accepted=%d active=%d\n", static_cast<int>(accepted), was_active ? 1 : 0);
+        if (accepted) {
+            ArmGameplayActionGate("quick-load-confirm-accepted");
+        }
     }
 
     g_load_modal_handler_original(self, source, accepted, arg4);
@@ -2426,6 +2658,9 @@ bool Initialize(HMODULE self_module) {
     g_state.dualsense_last_input_ms.store(0);
     g_state.pending_quick_save.store(false);
     g_state.pending_quick_load.store(false);
+    g_state.quick_actions_enabled.store(false);
+    g_state.gameplay_gate_armed.store(true);
+    g_state.gameplay_ready_since_ms.store(0);
     g_state.controller_source = ControllerSource::None;
     g_state.previous_controller_buttons = 0;
     g_state.previous_quick_save_key_down = false;

@@ -10,6 +10,7 @@ namespace quicksave::resolver {
 enum class SymbolId : std::uint32_t {
     DirectLocalSave = 0,
     SavePrecheck,
+    WeatherTickAnchor,
     SaveServiceDriver,
     ServiceChildPoll,
     InGameMenuLoadCore,
