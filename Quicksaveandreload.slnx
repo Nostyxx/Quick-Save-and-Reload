@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Quicksaveandreload/Quicksaveandreload.vcxproj" Id="83f3ddcb-5300-49c8-a514-d066f20a1836" />
+</Solution>
