@@ -29,7 +29,7 @@ namespace {
 constexpr const char* kModName = "Quick Save and Reload";
 constexpr const wchar_t* kIniFileName = L"QuickSaveAndReload.ini";
 constexpr const wchar_t* kLogFileName = L"QuickSaveAndReload.log";
-constexpr const char* kBuildSignature = "1_0_0_STABLE";
+constexpr const char* kBuildSignature = "1_0_1_STABLE";
 
 constexpr std::size_t kSaveRecordSize = 80;
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x128;
@@ -470,7 +470,7 @@ void ResolvePluginDir() {
 
 int KeyNameToVK(const wchar_t* name, int fallback) {
     if (name == nullptr || !name[0]) {
-        return fallback;
+        return 0;
     }
 
     if (_wcsicmp(name, L"NONE") == 0 || _wcsicmp(name, L"UNBOUND") == 0) return 0;
@@ -525,7 +525,7 @@ WORD ControllerTokenToMask(const wchar_t* token) {
 
 WORD ParseControllerCombo(const wchar_t* text, WORD fallback) {
     if (text == nullptr || !text[0]) {
-        return fallback;
+        return 0;
     }
     if (_wcsicmp(text, L"NONE") == 0 || _wcsicmp(text, L"UNBOUND") == 0) {
         return 0;
@@ -567,8 +567,8 @@ void WriteDefaultConfig(const std::wstring& ini_path) {
 
 void EnsureConfigValue(const std::wstring& ini_path, const wchar_t* section, const wchar_t* key, const wchar_t* value) {
     wchar_t buffer[64] = {};
-    GetPrivateProfileStringW(section, key, L"", buffer, static_cast<DWORD>(std::size(buffer)), ini_path.c_str());
-    if (buffer[0] == L'\0') {
+    GetPrivateProfileStringW(section, key, L"__MISSING__", buffer, static_cast<DWORD>(std::size(buffer)), ini_path.c_str());
+    if (wcscmp(buffer, L"__MISSING__") == 0) {
         WritePrivateProfileStringW(section, key, value, ini_path.c_str());
     }
 }
