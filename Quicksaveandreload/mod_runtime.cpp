@@ -29,7 +29,7 @@ namespace {
 constexpr const char* kModName = "Quick Save and Reload";
 constexpr const wchar_t* kIniFileName = L"QuickSaveAndReload.ini";
 constexpr const wchar_t* kLogFileName = L"QuickSaveAndReload.log";
-constexpr const char* kBuildSignature = "1_0_1_STABLE";
+constexpr const char* kBuildSignature = "1_0_2_STABLE";
 
 constexpr std::size_t kSaveRecordSize = 80;
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x128;
@@ -48,10 +48,11 @@ constexpr std::ptrdiff_t kRowOffsetIndexName = 0x348;
 constexpr DWORD kHotkeyPollIntervalMs = 25;
 constexpr DWORD kHotkeyCooldownMs = 350;
 constexpr DWORD kGameplayReadyDelayMs = 5000;
-constexpr UINT kMsgQuickSave = WM_APP + 0x510;
-constexpr UINT kMsgQuickLoad = WM_APP + 0x511;
 constexpr std::uintptr_t kUiSystemRootGlobalRva = 0x05D2AF40;
 constexpr std::uintptr_t kRootTitleHandleOpenLoadViewRva = 0x00CE3510;
+constexpr const wchar_t* kQuickSaveDispatchMessageName = L"Quick Save and Reload::QuickSave::66E1479A-160F-4E1B-B6D2-09465C58A11A";
+constexpr const wchar_t* kQuickLoadDispatchMessageName = L"Quick Save and Reload::QuickLoad::5D28E3A8-52AA-49DE-84C5-54EB44827C0D";
+constexpr std::uintptr_t kQuickDispatchToken = 0x5153525F44495350ull;
 struct Config {
     bool enable_mod = true;
     bool log_enabled = false;
@@ -88,6 +89,8 @@ struct RuntimeState {
     HANDLE stop_event = nullptr;
     HWND game_window = nullptr;
     WNDPROC original_wndproc = nullptr;
+    UINT quick_save_message = 0;
+    UINT quick_load_message = 0;
     std::atomic<std::uintptr_t> cached_save_request_actor{ 0 };
     std::atomic<std::uintptr_t> cached_direct_save_actor{ 0 };
     std::atomic<std::uintptr_t> cached_service_save_actor{ 0 };
@@ -708,6 +711,24 @@ void ShowNativeToast(const char* msg) {
     Log("[i] Native toast shown: %s\n", msg);
 }
 
+void ShowNativeToastFormatted(const char* fmt, ...) {
+    if (!g_state.config.toast_notification_enabled || fmt == nullptr || fmt[0] == '\0') {
+        return;
+    }
+
+    char buffer[128] = {};
+    va_list args;
+    va_start(args, fmt);
+    std::vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    buffer[sizeof(buffer) - 1] = '\0';
+    if (buffer[0] == '\0') {
+        return;
+    }
+
+    ShowNativeToast(buffer);
+}
+
 template <typename T>
 T ResolveCall(resolver::SymbolId id) {
     return reinterpret_cast<T>(resolver::Address(id));
@@ -838,6 +859,21 @@ bool ResolveDirectCalls() {
     return ok;
 }
 
+bool ResolveDispatchMessages() {
+    g_state.quick_save_message = RegisterWindowMessageW(kQuickSaveDispatchMessageName);
+    g_state.quick_load_message = RegisterWindowMessageW(kQuickLoadDispatchMessageName);
+    if (g_state.quick_save_message == 0 || g_state.quick_load_message == 0) {
+        Log("[E] Failed to register dispatch messages save=0x%X load=0x%X gle=%lu\n",
+            g_state.quick_save_message,
+            g_state.quick_load_message,
+            GetLastError());
+        return false;
+    }
+
+    Log("[i] Dispatch QuickSave=0x%X QuickLoad=0x%X\n", g_state.quick_save_message, g_state.quick_load_message);
+    return true;
+}
+
 
 bool AcquireLiveClientActorScope(ClientActorScope& out_scope);
 bool AcquireLiveClientUserActorScope(ClientActorScope& out_scope);
@@ -869,6 +905,7 @@ int FindRecordIndexBySlot(int slot_id);
 void InvokeQuickSave(const char* source);
 bool InvokeQuickLoadViaInGameCore(const char* source);
 void SetRowControlText(std::uint64_t row_script, std::ptrdiff_t offset, const char* text);
+bool ResolveDispatchMessages();
 
 void LogSaveManagerState(const char* label, std::int64_t manager) {
     if (!g_state.config.log_enabled || label == nullptr || manager == 0) {
@@ -1231,6 +1268,10 @@ void RegisterDualSenseRawInput(HWND hwnd) {
 }
 
 void QueueQuickCommand(UINT message, const char* source) {
+    if (message == 0) {
+        Log("[queue] source=%s message=0x%X unavailable no-dispatch-message\n", source, message);
+        return;
+    }
     if (g_state.game_window == nullptr) {
         Log("[queue] source=%s message=0x%X unavailable no-game-window\n", source, message);
         return;
@@ -1246,7 +1287,7 @@ void QueueQuickCommand(UINT message, const char* source) {
         return;
     }
 
-    const auto requested_kind = message == kMsgQuickSave ? QuickActionKind::Save : QuickActionKind::Load;
+    const auto requested_kind = message == g_state.quick_save_message ? QuickActionKind::Save : QuickActionKind::Load;
     const auto active_kind = static_cast<QuickActionKind>(g_state.quick_action_active.load());
     if (active_kind != QuickActionKind::None) {
         Log("[queue] source=%s message=0x%X unavailable busy active=%s\n",
@@ -1256,8 +1297,8 @@ void QueueQuickCommand(UINT message, const char* source) {
         return;
     }
 
-    if ((message == kMsgQuickSave && g_state.pending_quick_load.load())
-        || (message == kMsgQuickLoad && g_state.pending_quick_save.load())) {
+    if ((message == g_state.quick_save_message && g_state.pending_quick_load.load())
+        || (message == g_state.quick_load_message && g_state.pending_quick_save.load())) {
         Log("[queue] source=%s message=0x%X unavailable pending-other requested=%s\n",
             source,
             message,
@@ -1265,13 +1306,13 @@ void QueueQuickCommand(UINT message, const char* source) {
         return;
     }
 
-    std::atomic<bool>* pending = message == kMsgQuickSave ? &g_state.pending_quick_save : &g_state.pending_quick_load;
+    std::atomic<bool>* pending = message == g_state.quick_save_message ? &g_state.pending_quick_save : &g_state.pending_quick_load;
     bool expected = false;
     if (!pending->compare_exchange_strong(expected, true)) {
         return;
     }
 
-    if (!PostMessageW(g_state.game_window, message, 0, 0)) {
+    if (!PostMessageW(g_state.game_window, message, static_cast<WPARAM>(kQuickDispatchToken), 0)) {
         pending->store(false);
         Log("[queue] source=%s message=0x%X PostMessage failed gle=%lu\n", source, message, GetLastError());
         return;
@@ -1285,16 +1326,17 @@ LRESULT CALLBACK HookedGameWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
         ProcessDualSenseRawInput(reinterpret_cast<HRAWINPUT>(lparam));
     } else if (msg == WM_INPUT_DEVICE_CHANGE && hwnd == g_state.game_window) {
         RegisterDualSenseRawInput(hwnd);
-    } else if (msg == kMsgQuickSave) {
+    } else if (msg == g_state.quick_save_message && wparam == static_cast<WPARAM>(kQuickDispatchToken)) {
         const std::uintptr_t actor = ResolveQuickSaveActor();
         const DWORD save_tid = ResolveQuickSaveThreadId();
         if (save_tid == 0 || actor == 0) {
             g_state.pending_quick_save.store(false);
             Log("[quick-save] unavailable reason=no-save-context\n");
+            ShowNativeToastFormatted("QUICK SAVE FAILED");
             return 0;
         }
         return 0;
-    } else if (msg == kMsgQuickLoad) {
+    } else if (msg == g_state.quick_load_message && wparam == static_cast<WPARAM>(kQuickDispatchToken)) {
         const bool claimed = g_state.pending_quick_load.exchange(false);
         if (!claimed) {
             return 0;
@@ -1309,6 +1351,7 @@ LRESULT CALLBACK HookedGameWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
         }
 
         Log("[quick-load] unavailable reason=in-game-core-failed\n");
+        ShowNativeToastFormatted("QUICK LOAD FAILED");
         return 0;
     }
 
@@ -1410,6 +1453,7 @@ void InvokeQuickSave(const char* source) {
 
     if (g_direct_local_save_original == nullptr) {
         Log("[quick-save] source=%s unavailable reason=no-direct-save slot=%d\n", source, g_state.config.quick_slot_id);
+        ShowNativeToastFormatted("SAVE FUNCTION UNAVAILABLE");
         EndQuickAction(QuickActionKind::Save);
         return;
     }
@@ -1417,6 +1461,7 @@ void InvokeQuickSave(const char* source) {
     const std::uintptr_t actor = ResolveQuickSaveActor();
     if (actor == 0) {
         Log("[quick-save] source=%s unavailable reason=no-save-actor slot=%d\n", source, g_state.config.quick_slot_id);
+        ShowNativeToastFormatted("NO SAVE ACTOR");
         EndQuickAction(QuickActionKind::Save);
         return;
     }
@@ -1429,6 +1474,7 @@ void InvokeQuickSave(const char* source) {
                 source,
                 g_state.config.quick_slot_id,
                 static_cast<unsigned>(precheck_result));
+            ShowNativeToastFormatted("SAVE BLOCKED (0x%08X)", static_cast<unsigned>(precheck_result));
             EndQuickAction(QuickActionKind::Save);
             return;
         }
@@ -1455,11 +1501,19 @@ void InvokeQuickSave(const char* source) {
         save_succeeded ? 1 : 0);
     if (save_succeeded && g_state.config.toast_notification_enabled) {
         ShowNativeToast("QUICK SAVE SUCCESS");
+    } else if (!save_succeeded) {
+        ShowNativeToastFormatted("QUICK SAVE FAILED (%u)", static_cast<unsigned>(*out_result));
     }
 }
 
 bool InvokeQuickLoadViaInGameCore(const char* source) {
-    if (source == nullptr || g_in_game_menu_load_core_original == nullptr) {
+    if (source == nullptr) {
+        return false;
+    }
+
+    if (g_in_game_menu_load_core_original == nullptr) {
+        Log("[quick-load] source=%s unavailable reason=no-load-function\n", source);
+        ShowNativeToastFormatted("LOAD FUNCTION UNAVAILABLE");
         return false;
     }
 
@@ -1469,6 +1523,7 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
 
     if (FindRecordIndexBySlot(g_state.config.quick_slot_id) < 0) {
         Log("[quick-load] source=%s unavailable reason=slot-missing slot=%d\n", source, g_state.config.quick_slot_id);
+        ShowNativeToastFormatted("NO QUICK SAVE FOUND");
         EndQuickAction(QuickActionKind::Load);
         return false;
     }
@@ -1485,6 +1540,7 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
 
     if (!has_user_scope || self == 0 || key == 0) {
         Log("[quick-load] source=%s unavailable reason=in-game-core-context\n", source);
+        ShowNativeToastFormatted("GAME STATE UNAVAILABLE");
         ReleaseClientActorScope(user_scope);
         EndQuickAction(QuickActionKind::Load);
         return false;
@@ -1525,10 +1581,10 @@ void PollHotkeys() {
     }
 
     if (quick_save_key || quick_save_controller) {
-        QueueQuickCommand(kMsgQuickSave, quick_save_key ? "keyboard" : "controller");
+        QueueQuickCommand(g_state.quick_save_message, quick_save_key ? "keyboard" : "controller");
     }
     if (quick_load_key || quick_load_controller) {
-        QueueQuickCommand(kMsgQuickLoad, quick_load_key ? "keyboard" : "controller");
+        QueueQuickCommand(g_state.quick_load_message, quick_load_key ? "keyboard" : "controller");
     }
 }
 
@@ -2628,6 +2684,8 @@ bool Initialize(HMODULE self_module) {
     g_state.stop_event = nullptr;
     g_state.game_window = nullptr;
     g_state.original_wndproc = nullptr;
+    g_state.quick_save_message = 0;
+    g_state.quick_load_message = 0;
     g_state.cached_save_request_actor.store(0);
     g_state.cached_direct_save_actor.store(0);
     g_state.cached_service_save_actor.store(0);
@@ -2690,6 +2748,10 @@ bool Initialize(HMODULE self_module) {
         static_cast<unsigned>(g_state.config.quick_save_controller_mask),
         static_cast<unsigned>(g_state.config.quick_load_controller_mask));
 
+    if (!ResolveDispatchMessages()) {
+        return false;
+    }
+
     if (!g_state.config.enable_mod) {
         Log("[i] Mod disabled in config\n");
         return true;
@@ -2736,6 +2798,8 @@ void Shutdown() {
         g_state.original_wndproc = nullptr;
     }
     g_state.game_window = nullptr;
+    g_state.quick_save_message = 0;
+    g_state.quick_load_message = 0;
 
     if (g_state.hooks_installed) {
         MH_DisableHook(MH_ALL_HOOKS);

@@ -13,9 +13,7 @@ ASI mod for `CrimsonDesert.exe` that adds a native-style quick save slot and hot
 - reserves slot `108` as the dedicated quick save slot
 - shows that slot as `Quick Save` at the top of the load screen
 - hides the reserved quick slot from the normal save screen
-- supports quick save and quick load without requiring a prior manual save
 - uses the native quick-load confirmation modal by default
-- can show a native success toast after quick save
 
 ## What It Hooks
 
