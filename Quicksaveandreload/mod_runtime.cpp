@@ -29,9 +29,9 @@ namespace {
 constexpr const char* kModName = "Quick Save and Reload";
 constexpr const wchar_t* kIniFileName = L"QuickSaveAndReload.ini";
 constexpr const wchar_t* kLogFileName = L"QuickSaveAndReload.log";
-constexpr const char* kBuildSignature = "1_0_2_STABLE";
+constexpr const char* kBuildSignature = "1_0_4_STABLE";
 
-constexpr std::size_t kSaveRecordSize = 80;
+constexpr std::size_t kSaveRecordSize = 0x58;
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x128;
 constexpr std::ptrdiff_t kRootOffsetActiveModal = 0x188;
 constexpr std::ptrdiff_t kRootOffsetVisibleMap = 0x198;
@@ -42,16 +42,16 @@ constexpr std::ptrdiff_t kUiManagerRootGameDataLoadListOffset = 0x758;
 constexpr std::ptrdiff_t kUiManagerRootTitleListOffset = 0x788;
 constexpr std::ptrdiff_t kUiManagerVectorDataOffset = 0x38;
 constexpr std::ptrdiff_t kUiManagerVectorCountOffset = 0x40;
-constexpr std::ptrdiff_t kModalOffsetSlotItem = 0x120;
+constexpr std::ptrdiff_t kModalOffsetSlotItem = 0x128;
 constexpr std::ptrdiff_t kRowOffsetTypeText = 0x340;
 constexpr std::ptrdiff_t kRowOffsetIndexName = 0x348;
 constexpr DWORD kHotkeyPollIntervalMs = 25;
 constexpr DWORD kHotkeyCooldownMs = 350;
 constexpr DWORD kGameplayReadyDelayMs = 5000;
-constexpr std::uintptr_t kUiSystemRootGlobalRva = 0x05D2AF40;
-constexpr std::uintptr_t kRootTitleHandleOpenLoadViewRva = 0x00CE3510;
+constexpr std::uintptr_t kRootTitleHandleOpenLoadViewRva = 0x00D5BBE0;
 constexpr const wchar_t* kQuickSaveDispatchMessageName = L"Quick Save and Reload::QuickSave::66E1479A-160F-4E1B-B6D2-09465C58A11A";
 constexpr const wchar_t* kQuickLoadDispatchMessageName = L"Quick Save and Reload::QuickLoad::5D28E3A8-52AA-49DE-84C5-54EB44827C0D";
+constexpr const wchar_t* kQuickLoadCancelDispatchMessageName = L"Quick Save and Reload::QuickLoadCancel::A70E6A4B-3D2F-4D8E-89F1-5C2D3D709B31";
 constexpr std::uintptr_t kQuickDispatchToken = 0x5153525F44495350ull;
 struct Config {
     bool enable_mod = true;
@@ -65,7 +65,30 @@ struct Config {
     int quick_save_vk = VK_F5;
     int quick_load_vk = VK_F6;
     WORD quick_save_controller_mask = WORD(XINPUT_GAMEPAD_LEFT_SHOULDER | XINPUT_GAMEPAD_A);
-    WORD quick_load_controller_mask = WORD(XINPUT_GAMEPAD_LEFT_SHOULDER | XINPUT_GAMEPAD_B);
+    WORD quick_load_controller_mask = WORD(XINPUT_GAMEPAD_LEFT_SHOULDER | XINPUT_GAMEPAD_Y);
+    std::wstring locale = L"en_US";
+};
+
+enum class TextId : std::size_t {
+    UiRowLabel = 0,
+    ToastQuickSaveSuccess,
+    ToastQuickSaveFailed,
+    ToastSaveFunctionUnavailable,
+    ToastNoSaveActor,
+    ToastSaveBlockedCode,
+    ToastQuickSaveFailedCode,
+    ToastQuickLoadFailed,
+    ToastLoadFunctionUnavailable,
+    ToastNoQuickSaveFound,
+    ToastGameStateUnavailable,
+    Count
+};
+
+struct LocalizedEntry {
+    TextId id;
+    const wchar_t* en_us;
+    const wchar_t* ko_kr;
+    const wchar_t* fr_fr;
 };
 
 enum class ControllerSource : std::uint8_t {
@@ -89,8 +112,10 @@ struct RuntimeState {
     HANDLE stop_event = nullptr;
     HWND game_window = nullptr;
     WNDPROC original_wndproc = nullptr;
+    std::atomic<std::uintptr_t> raw_input_target_hwnd{ 0 };
     UINT quick_save_message = 0;
     UINT quick_load_message = 0;
+    UINT quick_load_cancel_message = 0;
     std::atomic<std::uintptr_t> cached_save_request_actor{ 0 };
     std::atomic<std::uintptr_t> cached_direct_save_actor{ 0 };
     std::atomic<std::uintptr_t> cached_service_save_actor{ 0 };
@@ -143,6 +168,7 @@ struct RuntimeState {
     ULONGLONG last_quick_save_dispatch_ms = 0;
     ULONGLONG last_quick_load_dispatch_ms = 0;
     Config config{};
+    std::array<std::string, static_cast<std::size_t>(TextId::Count)> text{};
 };
 
 RuntimeState g_state;
@@ -186,7 +212,7 @@ using AcquireClientActorScopeFn = ClientActorScope* (__fastcall*)(std::int64_t, 
 using AcquireClientUserActorScopeFn = ClientActorScope* (__fastcall*)(std::int64_t, ClientActorScope*);
 using ScopeSpecialReleaseFn = char(__fastcall*)(void*);
 using DirectLocalSaveFn = int* (__fastcall*)(std::int64_t, int*, int, unsigned char*);
-using SavePrecheckFn = int* (__fastcall*)(std::int64_t, int*, std::int64_t);
+using SavePrecheckFn = int* (__fastcall*)(std::int64_t, int*, std::int64_t, unsigned char*);
 using NativeToastCreateStringFn = void* (__fastcall*)(const char*);
 using NativeToastPushFn = void (__fastcall*)(void*, void**, unsigned int);
 using NativeToastReleaseStringFn = void (__fastcall*)(void*);
@@ -287,6 +313,54 @@ std::string NarrowWide(const wchar_t* text) {
         nullptr);
     result.resize(static_cast<std::size_t>(required - 1));
     return result;
+}
+
+const wchar_t* ResolveLocalizedWide(TextId id, const std::wstring& locale) {
+    static const LocalizedEntry kLocalizedEntries[] = {
+        { TextId::UiRowLabel, L"Quick Save", L"빠른 저장", L"Sauvegarde rapide" },
+        { TextId::ToastQuickSaveSuccess, L"QUICK SAVE SUCCESS", L"빠른 저장을 완료했습니다.", L"SUCCÈS DE LA SAUVEGARDE RAPIDE" },
+        { TextId::ToastQuickSaveFailed, L"QUICK SAVE FAILED", L"빠른 저장을 실패했습니다.", L"ÉCHEC DE LA SAUVEGARDE RAPIDE" },
+        { TextId::ToastSaveFunctionUnavailable, L"SAVE FUNCTION UNAVAILABLE", L"저장 기능을 사용할 수 없습니다.", L"SAUVEGARDE INDISPONIBLE" },
+        { TextId::ToastNoSaveActor, L"NO SAVE ACTOR", L"유효한 저장 객체를 찾을 수 없습니다.", L"PAS D'ENTITÉ DE SAUVEGARDE" },
+        { TextId::ToastSaveBlockedCode, L"SAVE BLOCKED (0x%08X)", L"저장이 차단되었습니다. (0x%08X)", L"SAUVEGARDE BLOQUÉE (0x%08X)" },
+        { TextId::ToastQuickSaveFailedCode, L"QUICK SAVE FAILED (%u)", L"빠른 저장을 실패했습니다. (%u)", L"ÉCHEC DE LA SAUVEGARDE RAPIDE (%u)" },
+        { TextId::ToastQuickLoadFailed, L"QUICK LOAD FAILED", L"빠른 불러오기에 실패했습니다.", L"ÉCHEC DU CHARGEMENT RAPIDE" },
+        { TextId::ToastLoadFunctionUnavailable, L"LOAD FUNCTION UNAVAILABLE", L"불러오기 기능을 사용할 수 없습니다.", L"CHARGEMENT INDISPONIBLE" },
+        { TextId::ToastNoQuickSaveFound, L"NO QUICK SAVE FOUND", L"빠른 저장 데이터를 찾을 수 없습니다.", L"SAUVEGARDE RAPIDE INTROUVABLE" },
+        { TextId::ToastGameStateUnavailable, L"GAME STATE UNAVAILABLE", L"게임 상태를 확인할 수 없습니다.", L"CONTEXTE DU JEU INDISPONIBLE" },
+    };
+
+    const bool use_korean =
+        _wcsicmp(locale.c_str(), L"ko_KR") == 0
+        || _wcsicmp(locale.c_str(), L"ko") == 0
+        || _wcsicmp(locale.c_str(), L"kr") == 0
+        || _wcsicmp(locale.c_str(), L"korean") == 0;
+    const bool use_french =
+        _wcsicmp(locale.c_str(), L"fr_FR") == 0
+        || _wcsicmp(locale.c_str(), L"fr") == 0
+        || _wcsicmp(locale.c_str(), L"french") == 0
+        || _wcsicmp(locale.c_str(), L"francais") == 0
+        || _wcsicmp(locale.c_str(), L"français") == 0;
+
+    for (const auto& entry : kLocalizedEntries) {
+        if (entry.id == id) {
+            if (use_korean) {
+                return entry.ko_kr;
+            }
+            if (use_french) {
+                return entry.fr_fr;
+            }
+            return entry.en_us;
+        }
+    }
+
+    return L"";
+}
+
+void ApplyBuiltInLocaleText(const std::wstring& locale) {
+    for (std::size_t i = 0; i < static_cast<std::size_t>(TextId::Count); ++i) {
+        g_state.text[i] = NarrowWide(ResolveLocalizedWide(static_cast<TextId>(i), locale));
+    }
 }
 
 void CacheRealLoadTemplate(std::int64_t self, const std::uint64_t* packet) {
@@ -559,8 +633,10 @@ void WriteDefaultConfig(const std::wstring& ini_path) {
         L"_HotkeyOptions",
         L"F1-F12, INSERT, DELETE, HOME, END, PGUP, PGDN, or single letter A-Z",
         ini_path.c_str());
+    WritePrivateProfileStringW(L"Locale", L"Language", L"en_US", ini_path.c_str());
+    WritePrivateProfileStringW(L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR", ini_path.c_str());
     WritePrivateProfileStringW(L"Hotkeys", L"ControllerHotkeyQuickSave", L"lb+a", ini_path.c_str());
-    WritePrivateProfileStringW(L"Hotkeys", L"ControllerHotkeyQuickLoad", L"lb+b", ini_path.c_str());
+    WritePrivateProfileStringW(L"Hotkeys", L"ControllerHotkeyQuickLoad", L"lb+y", ini_path.c_str());
     WritePrivateProfileStringW(
         L"Hotkeys",
         L"_ControllerHotkeyOptions",
@@ -591,8 +667,11 @@ void LoadConfig() {
         L"General",
         L"_HotkeyOptions",
         L"F1-F12, INSERT, DELETE, HOME, END, PGUP, PGDN, or single letter A-Z");
+    EnsureConfigValue(ini_path, L"Locale", L"Language", L"en_US");
+    EnsureConfigValue(ini_path, L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR");
+    WritePrivateProfileStringW(L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR", ini_path.c_str());
     EnsureConfigValue(ini_path, L"Hotkeys", L"ControllerHotkeyQuickSave", L"lb+a");
-    EnsureConfigValue(ini_path, L"Hotkeys", L"ControllerHotkeyQuickLoad", L"lb+b");
+    EnsureConfigValue(ini_path, L"Hotkeys", L"ControllerHotkeyQuickLoad", L"lb+y");
     EnsureConfigValue(
         ini_path,
         L"Hotkeys",
@@ -605,6 +684,12 @@ void LoadConfig() {
         GetPrivateProfileIntW(L"General", L"ToastNotification", 1, ini_path.c_str()) != 0;
     g_state.config.quick_load_confirmation_enabled =
         GetPrivateProfileIntW(L"General", L"QuickLoadConfirmation", 1, ini_path.c_str()) != 0;
+    wchar_t locale_text[64] = {};
+    GetPrivateProfileStringW(L"Locale", L"Language", L"", locale_text, static_cast<DWORD>(std::size(locale_text)), ini_path.c_str());
+    if (locale_text[0] == L'\0') {
+        GetPrivateProfileStringW(L"General", L"Locale", L"en_US", locale_text, static_cast<DWORD>(std::size(locale_text)), ini_path.c_str());
+    }
+    g_state.config.locale = locale_text[0] != L'\0' ? locale_text : L"en_US";
 
     wchar_t hotkey_text[64] = {};
     GetPrivateProfileStringW(L"General", L"HotkeyQuickSave", L"F5", hotkey_text, static_cast<DWORD>(std::size(hotkey_text)), ini_path.c_str());
@@ -623,7 +708,7 @@ void LoadConfig() {
     GetPrivateProfileStringW(
         L"Hotkeys",
         L"ControllerHotkeyQuickLoad",
-        L"lb+b",
+        L"lb+y",
         hotkey_text,
         static_cast<DWORD>(std::size(hotkey_text)),
         ini_path.c_str());
@@ -727,6 +812,16 @@ void ShowNativeToastFormatted(const char* fmt, ...) {
     }
 
     ShowNativeToast(buffer);
+}
+
+const char* LocalizedRowLabel() {
+    const auto& text = g_state.text[static_cast<std::size_t>(TextId::UiRowLabel)];
+    return text.empty() ? "Quick Save" : text.c_str();
+}
+
+const char* LocalizedTextValue(TextId id, const char* fallback) {
+    const auto& text = g_state.text[static_cast<std::size_t>(id)];
+    return text.empty() ? fallback : text.c_str();
 }
 
 template <typename T>
@@ -886,9 +981,11 @@ ResolvedWorldEnv ResolveWorldEnv();
 void ArmGameplayActionGate(const char* reason);
 void TickGameplayActionGateOnGameThread();
 void CacheLoadUiRoot(std::int64_t root, const char* source);
+void ClearCachedLoadUiRoot();
 bool IsLikelyLoadUiRoot(std::int64_t root);
 std::int64_t ResolveLiveQuickLoadUiRoot(const char* source);
 bool TryOpenQuickLoadConfirmationModal(const char* source);
+bool TryOpenQuickLoadConfirmationModalSafe(const char* source);
 std::uint32_t GetVisibleCount(std::int64_t root);
 int* GetVisibleMap(std::int64_t root);
 std::uint32_t GetSelectedVisibleRow(std::int64_t root);
@@ -904,6 +1001,7 @@ void EndQuickAction(QuickActionKind kind);
 int FindRecordIndexBySlot(int slot_id);
 void InvokeQuickSave(const char* source);
 bool InvokeQuickLoadViaInGameCore(const char* source);
+bool InvokeQuickLoadViaInGameCoreSafe(const char* source);
 void SetRowControlText(std::uint64_t row_script, std::ptrdiff_t offset, const char* text);
 bool ResolveDispatchMessages();
 
@@ -1121,25 +1219,6 @@ bool IsDualSenseHidDevice(HANDLE device) {
     return info.hid.dwProductId == 0x0CE6 || info.hid.dwProductId == 0x0DF2;
 }
 
-bool HasSupportedSonyRawInputDevice() {
-    UINT device_count = 0;
-    if (GetRawInputDeviceList(nullptr, &device_count, sizeof(RAWINPUTDEVICELIST)) != 0 || device_count == 0) {
-        return false;
-    }
-
-    std::vector<RAWINPUTDEVICELIST> devices(device_count);
-    if (GetRawInputDeviceList(devices.data(), &device_count, sizeof(RAWINPUTDEVICELIST)) == static_cast<UINT>(-1)) {
-        return false;
-    }
-
-    for (UINT i = 0; i < device_count; ++i) {
-        if (IsDualSenseHidDevice(devices[i].hDevice)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool GetDualSensePreparsedData(HANDLE device, std::vector<BYTE>& storage, PHIDP_PREPARSED_DATA* out_data) {
     if (out_data != nullptr) {
         *out_data = nullptr;
@@ -1246,7 +1325,12 @@ void ProcessDualSenseRawInput(HRAWINPUT raw_input_handle) {
 }
 
 void RegisterDualSenseRawInput(HWND hwnd) {
-    if (hwnd == nullptr || !HasSupportedSonyRawInputDevice()) {
+    if (hwnd == nullptr) {
+        return;
+    }
+
+    const auto hwnd_value = reinterpret_cast<std::uintptr_t>(hwnd);
+    if (g_state.raw_input_target_hwnd.load() == hwnd_value) {
         return;
     }
 
@@ -1261,6 +1345,7 @@ void RegisterDualSenseRawInput(HWND hwnd) {
     devices[1].hwndTarget = hwnd;
 
     if (RegisterRawInputDevices(devices, 2, sizeof(RAWINPUTDEVICE))) {
+        g_state.raw_input_target_hwnd.store(hwnd_value);
         Log("[+] Registered DualSense raw input on hwnd=%p\n", hwnd);
     } else {
         Log("[W] RegisterRawInputDevices failed gle=%lu\n", GetLastError());
@@ -1324,15 +1409,25 @@ void QueueQuickCommand(UINT message, const char* source) {
 LRESULT CALLBACK HookedGameWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
     if (msg == WM_INPUT) {
         ProcessDualSenseRawInput(reinterpret_cast<HRAWINPUT>(lparam));
-    } else if (msg == WM_INPUT_DEVICE_CHANGE && hwnd == g_state.game_window) {
-        RegisterDualSenseRawInput(hwnd);
-    } else if (msg == g_state.quick_save_message && wparam == static_cast<WPARAM>(kQuickDispatchToken)) {
+    } else if (msg == WM_INPUT_DEVICE_CHANGE && hwnd == g_state.game_window && wparam == GIDC_REMOVAL) {
+        const HANDLE device = reinterpret_cast<HANDLE>(lparam);
+        if (IsDualSenseHidDevice(device)) {
+            g_state.dualsense_buttons.store(0);
+            g_state.dualsense_last_input_ms.store(0);
+            g_state.previous_controller_buttons = 0;
+            if (g_state.controller_source == ControllerSource::DualSenseRaw) {
+                g_state.controller_source = ControllerSource::None;
+            }
+        }
+    }
+
+    if (msg == g_state.quick_save_message && wparam == static_cast<WPARAM>(kQuickDispatchToken)) {
         const std::uintptr_t actor = ResolveQuickSaveActor();
         const DWORD save_tid = ResolveQuickSaveThreadId();
         if (save_tid == 0 || actor == 0) {
             g_state.pending_quick_save.store(false);
             Log("[quick-save] unavailable reason=no-save-context\n");
-            ShowNativeToastFormatted("QUICK SAVE FAILED");
+            ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastQuickSaveFailed, "QUICK SAVE FAILED"));
             return 0;
         }
         return 0;
@@ -1342,16 +1437,24 @@ LRESULT CALLBACK HookedGameWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
             return 0;
         }
 
-        if (TryOpenQuickLoadConfirmationModal("wndproc-ui")) {
+        Log("[quick-load] message received hwnd=%p\n", hwnd);
+
+        if (TryOpenQuickLoadConfirmationModalSafe("wndproc-ui")) {
             return 0;
         }
 
-        if (InvokeQuickLoadViaInGameCore("wndproc-ui")) {
+        if (g_state.config.quick_load_confirmation_enabled) {
+            Log("[quick-load] unavailable reason=confirmation-open-failed direct-fallback-blocked\n");
+            ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastQuickLoadFailed, "QUICK LOAD FAILED"));
+            return 0;
+        }
+
+        if (InvokeQuickLoadViaInGameCoreSafe("wndproc-ui")) {
             return 0;
         }
 
         Log("[quick-load] unavailable reason=in-game-core-failed\n");
-        ShowNativeToastFormatted("QUICK LOAD FAILED");
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastQuickLoadFailed, "QUICK LOAD FAILED"));
         return 0;
     }
 
@@ -1453,7 +1556,7 @@ void InvokeQuickSave(const char* source) {
 
     if (g_direct_local_save_original == nullptr) {
         Log("[quick-save] source=%s unavailable reason=no-direct-save slot=%d\n", source, g_state.config.quick_slot_id);
-        ShowNativeToastFormatted("SAVE FUNCTION UNAVAILABLE");
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastSaveFunctionUnavailable, "SAVE FUNCTION UNAVAILABLE"));
         EndQuickAction(QuickActionKind::Save);
         return;
     }
@@ -1461,20 +1564,23 @@ void InvokeQuickSave(const char* source) {
     const std::uintptr_t actor = ResolveQuickSaveActor();
     if (actor == 0) {
         Log("[quick-save] source=%s unavailable reason=no-save-actor slot=%d\n", source, g_state.config.quick_slot_id);
-        ShowNativeToastFormatted("NO SAVE ACTOR");
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastNoSaveActor, "NO SAVE ACTOR"));
         EndQuickAction(QuickActionKind::Save);
         return;
     }
 
     int precheck_result = 0;
     if (g_save_precheck != nullptr) {
-        int* precheck_status = g_save_precheck(0, &precheck_result, static_cast<std::int64_t>(actor));
+        DirectSaveCallScratch precheck_scratch{};
+        auto* precheck_flags = reinterpret_cast<unsigned char*>(&precheck_scratch.flags_word);
+        int* precheck_status =
+            g_save_precheck(static_cast<std::int64_t>(actor), &precheck_result, static_cast<std::int64_t>(actor), precheck_flags);
         if (precheck_status == nullptr || precheck_result != 0) {
             Log("[quick-save] source=%s unavailable reason=native-precheck slot=%d code=0x%08X\n",
                 source,
                 g_state.config.quick_slot_id,
                 static_cast<unsigned>(precheck_result));
-            ShowNativeToastFormatted("SAVE BLOCKED (0x%08X)", static_cast<unsigned>(precheck_result));
+            ShowNativeToastFormatted(LocalizedTextValue(TextId::ToastSaveBlockedCode, "SAVE BLOCKED (0x%08X)"), static_cast<unsigned>(precheck_result));
             EndQuickAction(QuickActionKind::Save);
             return;
         }
@@ -1500,9 +1606,9 @@ void InvokeQuickSave(const char* source) {
         static_cast<unsigned>(*out_result),
         save_succeeded ? 1 : 0);
     if (save_succeeded && g_state.config.toast_notification_enabled) {
-        ShowNativeToast("QUICK SAVE SUCCESS");
+        ShowNativeToast(LocalizedTextValue(TextId::ToastQuickSaveSuccess, "QUICK SAVE SUCCESS"));
     } else if (!save_succeeded) {
-        ShowNativeToastFormatted("QUICK SAVE FAILED (%u)", static_cast<unsigned>(*out_result));
+        ShowNativeToastFormatted(LocalizedTextValue(TextId::ToastQuickSaveFailedCode, "QUICK SAVE FAILED (%u)"), static_cast<unsigned>(*out_result));
     }
 }
 
@@ -1513,7 +1619,7 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
 
     if (g_in_game_menu_load_core_original == nullptr) {
         Log("[quick-load] source=%s unavailable reason=no-load-function\n", source);
-        ShowNativeToastFormatted("LOAD FUNCTION UNAVAILABLE");
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastLoadFunctionUnavailable, "LOAD FUNCTION UNAVAILABLE"));
         return false;
     }
 
@@ -1523,7 +1629,7 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
 
     if (FindRecordIndexBySlot(g_state.config.quick_slot_id) < 0) {
         Log("[quick-load] source=%s unavailable reason=slot-missing slot=%d\n", source, g_state.config.quick_slot_id);
-        ShowNativeToastFormatted("NO QUICK SAVE FOUND");
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastNoQuickSaveFound, "NO QUICK SAVE FOUND"));
         EndQuickAction(QuickActionKind::Load);
         return false;
     }
@@ -1540,7 +1646,7 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
 
     if (!has_user_scope || self == 0 || key == 0) {
         Log("[quick-load] source=%s unavailable reason=in-game-core-context\n", source);
-        ShowNativeToastFormatted("GAME STATE UNAVAILABLE");
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastGameStateUnavailable, "GAME STATE UNAVAILABLE"));
         ReleaseClientActorScope(user_scope);
         EndQuickAction(QuickActionKind::Load);
         return false;
@@ -1549,8 +1655,24 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
     std::int32_t out_result = 0;
     std::int64_t target_key = static_cast<std::int64_t>(key);
     ArmGameplayActionGate("quick-load-dispatch");
-    std::int32_t* result =
-        g_in_game_menu_load_core_original(self, &out_result, &target_key, static_cast<unsigned int>(g_state.config.quick_slot_id));
+    std::int32_t* result = nullptr;
+    __try {
+        result = g_in_game_menu_load_core_original(
+            self,
+            &out_result,
+            &target_key,
+            static_cast<unsigned int>(g_state.config.quick_slot_id));
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Log("[quick-load] source=%s path=in-game-load-core exception=0x%08lX self=%p key=0x%llX slot=%d\n",
+            source,
+            static_cast<unsigned long>(GetExceptionCode()),
+            reinterpret_cast<void*>(self),
+            static_cast<unsigned long long>(key),
+            g_state.config.quick_slot_id);
+        ReleaseClientActorScope(user_scope);
+        EndQuickAction(QuickActionKind::Load);
+        return false;
+    }
     Log("[quick-load] source=%s path=in-game-load-core slot=%d out=%d success=%d\n",
         source,
         g_state.config.quick_slot_id,
@@ -1559,6 +1681,18 @@ bool InvokeQuickLoadViaInGameCore(const char* source) {
     ReleaseClientActorScope(user_scope);
     EndQuickAction(QuickActionKind::Load);
     return true;
+}
+
+bool InvokeQuickLoadViaInGameCoreSafe(const char* source) {
+    __try {
+        return InvokeQuickLoadViaInGameCore(source);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Log("[quick-load] source=%s unavailable reason=exception code=0x%08lX\n",
+            source != nullptr ? source : "<null>",
+            static_cast<unsigned long>(GetExceptionCode()));
+        EndQuickAction(QuickActionKind::Load);
+        return false;
+    }
 }
 
 void PollHotkeys() {
@@ -1743,7 +1877,10 @@ bool PassesNativeQuickActionReadyCheck(unsigned* out_code) {
 
     __try {
         int precheck_result = 0;
-        int* precheck_status = g_save_precheck(0, &precheck_result, static_cast<std::int64_t>(actor));
+        DirectSaveCallScratch precheck_scratch{};
+        auto* precheck_flags = reinterpret_cast<unsigned char*>(&precheck_scratch.flags_word);
+        int* precheck_status =
+            g_save_precheck(static_cast<std::int64_t>(actor), &precheck_result, static_cast<std::int64_t>(actor), precheck_flags);
         if (out_code != nullptr) {
             *out_code = static_cast<unsigned>(precheck_result);
         }
@@ -1882,6 +2019,11 @@ void CacheLoadUiRoot(std::int64_t root, const char* source) {
     g_state.cached_load_ui_vftable.store(vftable);
 }
 
+void ClearCachedLoadUiRoot() {
+    g_state.cached_load_ui_root.store(0);
+    g_state.cached_load_ui_vftable.store(0);
+}
+
 bool IsLikelyLoadUiRoot(std::int64_t root) {
     if (root == 0) {
         return false;
@@ -1911,14 +2053,13 @@ bool IsLikelyLoadUiRoot(std::int64_t root) {
 }
 
 std::uint64_t GetUiSystemRoot() {
-    const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
-    if (base == 0) {
+    const auto root_global = resolver::Address(resolver::SymbolId::GameStateGlobal);
+    if (root_global == 0) {
         return 0;
     }
 
     __try {
-        const auto* root_global = reinterpret_cast<const std::uint64_t*>(base + kUiSystemRootGlobalRva);
-        return root_global != nullptr ? *root_global : 0;
+        return *reinterpret_cast<const std::uint64_t*>(root_global);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return 0;
     }
@@ -1974,8 +2115,16 @@ std::int64_t PrimeLiveQuickLoadUiRoot(std::int64_t root, const char* source) {
     }
 
     if (g_build_visible_map_original != nullptr) {
-        g_build_visible_map_original(root);
-        CacheLoadUiRoot(root, source);
+        __try {
+            g_build_visible_map_original(root);
+            CacheLoadUiRoot(root, source);
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            Log("[quick-load-confirm] prime-root exception=0x%08lX root=%p source=%s\n",
+                static_cast<unsigned long>(GetExceptionCode()),
+                reinterpret_cast<void*>(root),
+                source != nullptr ? source : "<null>");
+            return 0;
+        }
     }
     if (IsLikelyLoadUiRoot(root)) {
         CacheLoadUiRoot(root, source);
@@ -1989,6 +2138,10 @@ std::int64_t ResolveLiveQuickLoadUiRoot(const char* source) {
     if (IsLikelyLoadUiRoot(cached_root)) {
         return cached_root;
     }
+    if (cached_root != 0) {
+        Log("[quick-load-confirm] ignored invalid cached root=%p\n", reinterpret_cast<void*>(cached_root));
+        ClearCachedLoadUiRoot();
+    }
 
     const std::uint64_t manager = GetUiSystemManager();
     if (manager == 0) {
@@ -2001,6 +2154,9 @@ std::int64_t ResolveLiveQuickLoadUiRoot(const char* source) {
         CacheLoadUiRoot(root, source);
         return root;
     }
+    if (root != 0) {
+        Log("[quick-load-confirm] load-root candidate requires prime root=%p\n", reinterpret_cast<void*>(root));
+    }
     root = PrimeLiveQuickLoadUiRoot(root, source);
     if (IsLikelyLoadUiRoot(root)) {
         return root;
@@ -2008,14 +2164,20 @@ std::int64_t ResolveLiveQuickLoadUiRoot(const char* source) {
 
     const auto root_title = FindFirstRegisteredUiObject(manager, kUiManagerRootTitleListOffset);
     if (root_title != 0 && g_root_title_handle_open_load_view != nullptr) {
+        Log("[quick-load-confirm] attempting open-load-view root_title=%p\n", reinterpret_cast<void*>(root_title));
         __try {
             g_root_title_handle_open_load_view(root_title);
         } __except (EXCEPTION_EXECUTE_HANDLER) {
-            Log("[quick-load-confirm] unavailable reason=open-load-view-except\n");
+            Log("[quick-load-confirm] unavailable reason=open-load-view-except code=0x%08lX root_title=%p\n",
+                static_cast<unsigned long>(GetExceptionCode()),
+                reinterpret_cast<void*>(root_title));
             return 0;
         }
 
         root = FindFirstRegisteredUiObject(manager, kUiManagerRootGameDataLoadListOffset);
+        if (root != 0) {
+            Log("[quick-load-confirm] post-open load-root candidate=%p\n", reinterpret_cast<void*>(root));
+        }
         root = PrimeLiveQuickLoadUiRoot(root, source);
         if (IsLikelyLoadUiRoot(root)) {
             CacheLoadUiRoot(root, source);
@@ -2027,6 +2189,8 @@ std::int64_t ResolveLiveQuickLoadUiRoot(const char* source) {
 }
 
 bool TryOpenQuickLoadConfirmationModal(const char* source) {
+    Log("[quick-load-confirm] begin source=%s\n", source != nullptr ? source : "<null>");
+
     if (!g_state.config.quick_load_confirmation_enabled || g_load_selected_refresh_original == nullptr) {
         return false;
     }
@@ -2066,6 +2230,18 @@ bool TryOpenQuickLoadConfirmationModal(const char* source) {
 
     Log("[quick-load-confirm] unavailable reason=open-failed\n");
     return false;
+}
+
+bool TryOpenQuickLoadConfirmationModalSafe(const char* source) {
+    __try {
+        return TryOpenQuickLoadConfirmationModal(source);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        Log("[quick-load-confirm] unavailable reason=exception code=0x%08lX\n",
+            static_cast<unsigned long>(GetExceptionCode()));
+        ClearCachedLoadUiRoot();
+        g_state.quick_load_confirm_modal_active.store(false);
+        return false;
+    }
 }
 
 std::uint64_t GetSaveCatalog() {
@@ -2424,7 +2600,7 @@ std::int64_t __fastcall SetControlTextHook(std::uint64_t control, const void* te
     if (g_reserved_quick_row_text_override && g_reserved_quick_row_script != 0) {
         const std::uint64_t type_control = *reinterpret_cast<std::uint64_t*>(g_reserved_quick_row_script + kRowOffsetTypeText);
         if (control != 0 && control == type_control) {
-            text = "Quick Save";
+            text = LocalizedRowLabel();
         }
     }
 
@@ -2445,7 +2621,7 @@ std::int64_t __fastcall RenderSlotRowHook(std::uint64_t* row_script, unsigned in
 
         const std::int64_t result = g_render_slot_row_original(row_script, shadow_record, flag);
         const std::uint64_t row_script_u64 = reinterpret_cast<std::uint64_t>(row_script);
-        SetRowControlText(row_script_u64, kRowOffsetTypeText, "Quick Save");
+        SetRowControlText(row_script_u64, kRowOffsetTypeText, LocalizedRowLabel());
         SetRowControlText(row_script_u64, kRowOffsetIndexName, "");
         return result;
     }
@@ -2479,13 +2655,13 @@ void RenderReservedQuickRowScript(std::uint64_t row_script, const char* context)
 
         const ScopedReservedQuickRowTextOverride override_scope(row_script);
         g_render_slot_row(reinterpret_cast<std::uint64_t*>(row_script), shadow_record, 0);
-        SetRowControlText(row_script, kRowOffsetTypeText, "Quick Save");
+        SetRowControlText(row_script, kRowOffsetTypeText, LocalizedRowLabel());
         SetRowControlText(row_script, kRowOffsetIndexName, "");
     } else {
         const ScopedReservedQuickRowTextOverride override_scope(row_script);
         g_render_slot_row(reinterpret_cast<std::uint64_t*>(row_script), nullptr, 1);
-        SetRowControlText(row_script, kRowOffsetTypeText, "Quick Save");
-        SetRowControlText(row_script, kRowOffsetIndexName, "Quick Save");
+        SetRowControlText(row_script, kRowOffsetTypeText, LocalizedRowLabel());
+        SetRowControlText(row_script, kRowOffsetIndexName, LocalizedRowLabel());
     }
 }
 
@@ -2561,6 +2737,9 @@ void __fastcall BuildVisibleMapHook(std::int64_t root) {
     if (HideReservedQuickSlotFromSaveUi(root)) {
         changed = true;
     }
+    if (changed) {
+        LogVisibleMapSnapshot("build-visible-map", root);
+    }
 }
 
 std::int64_t __fastcall LoadListEventHook(
@@ -2593,10 +2772,16 @@ std::int64_t __fastcall LoadSelectedRefreshHook(std::int64_t root) {
 
     if (g_state.config.enable_reserved_load_row && g_state.config.enable_experimental_load_ui && IsLoadStyleMode(root)
         && GetSelectedVisibleRow(root) == 0) {
-        const std::uint64_t modal = *reinterpret_cast<std::uint64_t*>(root + kRootOffsetActiveModal);
-        if (modal != 0) {
-            const std::uint64_t row_script = *reinterpret_cast<std::uint64_t*>(modal + kModalOffsetSlotItem);
-            RenderReservedQuickRowScript(row_script, "load-modal-row");
+        __try {
+            const std::uint64_t modal = *reinterpret_cast<std::uint64_t*>(root + kRootOffsetActiveModal);
+            if (modal != 0) {
+                const std::uint64_t row_script = *reinterpret_cast<std::uint64_t*>(modal + kModalOffsetSlotItem);
+                RenderReservedQuickRowScript(row_script, "load-modal-row");
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            Log("[load-modal-row] skipped exception=0x%08lX root=%p\n",
+                static_cast<unsigned long>(GetExceptionCode()),
+                reinterpret_cast<void*>(root));
         }
     }
 
@@ -2712,10 +2897,16 @@ bool Initialize(HMODULE self_module) {
     g_state.cached_login_character_slot = 0;
     g_state.cached_login_character_payload_count = 0;
     g_state.cached_login_character_payload.fill(0);
+    g_state.cached_in_game_load_core_self.store(0);
+    g_state.cached_in_game_load_target_key.store(0);
+    g_state.cached_in_game_load_ui_thread_id.store(0);
+    ClearCachedLoadUiRoot();
     g_state.dualsense_buttons.store(0);
     g_state.dualsense_last_input_ms.store(0);
     g_state.pending_quick_save.store(false);
     g_state.pending_quick_load.store(false);
+    g_state.quick_save_active.store(false);
+    g_state.quick_load_confirm_modal_active.store(false);
     g_state.quick_actions_enabled.store(false);
     g_state.gameplay_gate_armed.store(true);
     g_state.gameplay_ready_since_ms.store(0);
@@ -2732,6 +2923,7 @@ bool Initialize(HMODULE self_module) {
 
     ResolvePluginDir();
     LoadConfig();
+    ApplyBuiltInLocaleText(g_state.config.locale);
     OpenLog();
 
     Log("===============================================\n");
@@ -2747,6 +2939,8 @@ bool Initialize(HMODULE self_module) {
         g_state.config.quick_load_vk,
         static_cast<unsigned>(g_state.config.quick_save_controller_mask),
         static_cast<unsigned>(g_state.config.quick_load_controller_mask));
+    const std::string locale_name = NarrowWide(g_state.config.locale.c_str());
+    Log("[i] Locale: %s\n", locale_name.c_str());
 
     if (!ResolveDispatchMessages()) {
         return false;
@@ -2798,8 +2992,11 @@ void Shutdown() {
         g_state.original_wndproc = nullptr;
     }
     g_state.game_window = nullptr;
+    g_state.raw_input_target_hwnd.store(0);
+    ClearCachedLoadUiRoot();
     g_state.quick_save_message = 0;
     g_state.quick_load_message = 0;
+    g_state.quick_load_confirm_modal_active.store(false);
 
     if (g_state.hooks_installed) {
         MH_DisableHook(MH_ALL_HOOKS);

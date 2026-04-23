@@ -50,9 +50,13 @@ HotkeyQuickSave=F5
 HotkeyQuickLoad=F6
 _HotkeyOptions=F1-F12, INSERT, DELETE, HOME, END, PGUP, PGDN, or single letter A-Z
 
+[Locale]
+Language=en_US
+_LanguageOptions=en_US, ko_KR, fr_FR
+
 [Hotkeys]
 ControllerHotkeyQuickSave=lb+a
-ControllerHotkeyQuickLoad=lb+b
+ControllerHotkeyQuickLoad=lb+y
 _ControllerHotkeyOptions=Use dpad_up/down/left/right + a/b/x/y/lb/rb/start/back
 ```
 
@@ -61,6 +65,7 @@ Notes:
 - `LogEnabled=1`: writes startup and runtime diagnostics.
 - `ToastNotification=1`: shows the native quick save success toast.
 - `QuickLoadConfirmation=1`: shows the native confirmation modal before quick load.
+- `Language`: selects the built-in locale for UI label and toasts.
 - `HotkeyQuickSave`: keyboard quick save hotkey.
 - `HotkeyQuickLoad`: keyboard quick load hotkey.
 - `ControllerHotkeyQuickSave`: controller combo for quick save.

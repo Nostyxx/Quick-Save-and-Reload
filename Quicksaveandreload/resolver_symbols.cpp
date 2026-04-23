@@ -48,16 +48,15 @@ NativeToastBridge g_toast_bridge{};
 
 constexpr const char* kAobDirectLocalSaveStrict =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
-    "48 89 E5 48 83 EC 60 4D 89 CC 45 89 C5 49 89 D7 49 89 CE 80 3D ?? ?? ?? ?? 00 75 09 31 C0 89 02 E9 ?? ?? ?? ??";
+    "48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF 80 3D ?? ?? ?? ?? 00 75 ?? C7 02 00 00 00 00 E9 ?? ?? ?? ??";
 constexpr const char* kAobDirectLocalSaveRelaxed =
-    "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 48 89 E5 48 83 EC 60 4D 89 CC 45 89 C5 49 89 D7";
+    "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF";
 
 constexpr const char* kAobSavePrecheckStrict =
-    "48 89 5C 24 10 48 89 74 24 20 48 89 4C 24 08 57 48 83 EC 20 4C 89 C7 48 89 D3 49 8D 50 08 31 F6 4D 85 C0 48 0F 44 D6 "
-    "48 8B 12 48 8D 4C 24 40 E8 ?? ?? ?? ?? 90 E8 ?? ?? ?? ?? 48 8D 15 ?? ?? ?? ?? 48 89 C1 E8 ?? ?? ?? ?? 48 85 C0 74 05 40 38 30 75 1E";
+    "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 56 41 57 48 89 E5 48 83 EC 50 4C 89 CF 4C 89 C6 49 89 D6 31 DB "
+    "48 8D 55 D8 49 8B 88 A0 00 00 00 E8 ?? ?? ?? ?? 90 44 0F B6 7D E8 48 8B 56 08 48 8D 4D 40";
 constexpr const char* kAobSavePrecheckRelaxed =
-    "48 89 5C 24 10 48 89 74 24 20 48 89 4C 24 08 57 48 83 EC 20 4C 89 C7 48 89 D3 49 8D 50 08 31 F6 4D 85 C0 48 0F 44 D6 "
-    "48 8B 12 48 8D 4C 24 40 E8 ?? ?? ?? ?? 90 E8 ?? ?? ?? ??";
+    "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 56 41 57 48 89 E5 48 83 EC 50 4C 89 CF 4C 89 C6 49 89 D6 31 DB";
 
 constexpr const char* kAobWeatherTickAnchorStrict =
     "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 88 D8 0E 00 00";
@@ -78,15 +77,15 @@ constexpr const char* kAobServiceChildPollRelaxed =
 
 constexpr const char* kAobInGameMenuLoadCoreStrict =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8D AC 24 50 FF FF FF 48 81 EC B0 01 00 00 "
-    "48 89 D3 48 89 CF 31 F6 89 74 24 20 40 38 B1 C9 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9";
+    "48 89 D3 48 89 CF 31 F6 89 74 24 20 40 38 B1 CA 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9 02";
 constexpr const char* kAobInGameMenuLoadCoreRelaxed =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8D AC 24 50 FF FF FF 48 81 EC B0 01 00 00 48 89 D3 48 89 CF 31 F6";
 
 constexpr const char* kAobBuildVisibleMapStrict =
-    "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 78 4C 8B F9 45 33 F6 44 89 B1 A0 01 00 00 "
-    "4C 8D A9 98 01 00 00 4C 89 6D 60 41 8D 56 0F 49 8B CD E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ??";
+    "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 78 33 F6 89 B1 A0 01 00 00 "
+    "48 8D B9 98 01 00 00 48 89 7D A8 8D 56 0F 48 8B CF E8 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 4C 8B B8 B0 00 00 00";
 constexpr const char* kAobBuildVisibleMapRelaxed =
-    "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 78 4C 8B F9 45 33 F6 44 89 B1 A0 01 00 00 4C 8D A9 98 01 00 00";
+    "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 78 33 F6 89 B1 A0 01 00 00 48 8D B9 98 01 00 00";
 
 constexpr const char* kAobLoadListEventThunkStrict =
     "48 89 5C 24 08 57 48 81 EC 20 0B 00 00 48 8B D9 4C 39 81 38 01 00 00 0F 85 ?? ?? ?? ?? "
@@ -102,10 +101,10 @@ constexpr const char* kAobLoadSelectedRefreshRelaxed =
     "48 89 5C 24 20 55 56 57 41 56 41 57 48 81 EC 30 0B 00 00 48 8B D9 48 8B 81 28 01 00 00 8B 88 18 01 00 00 39 8B A0 01 00 00";
 
 constexpr const char* kAobLoadModalHandlerStrict =
-    "48 89 5C 24 18 48 89 74 24 20 55 57 41 56 48 8B EC 48 83 EC 60 49 8B F1 48 8B F9 45 33 F6 48 8B 99 70 01 00 00 "
-    "48 3B DA 0F 85 ?? ?? ?? ?? 45 84 C0 0F 84 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 8B";
+    "48 89 5C 24 18 55 56 57 41 56 41 57 48 8D 6C 24 80 48 81 EC 80 01 00 00 49 8B F1 4C 8B F1 45 33 FF 48 8B 99 70 01 00 00 "
+    "48 3B DA 0F 85 ?? ?? ?? ?? 45 84 C0 0F 84 ?? ?? ?? ??";
 constexpr const char* kAobLoadModalHandlerRelaxed =
-    "48 89 5C 24 18 48 89 74 24 20 55 57 41 56 48 8B EC 48 83 EC 60 49 8B F1 48 8B F9 45 33 F6 48 8B 99 70 01 00 00 48 3B DA";
+    "48 89 5C 24 18 55 56 57 41 56 41 57 48 8D 6C 24 80 48 81 EC 80 01 00 00 49 8B F1 4C 8B F1 45 33 FF 48 8B 99 70 01 00 00 48 3B DA";
 
 constexpr const char* kAobGameServiceGlobalStrict =
     "48 83 EC 28 48 8B 0D ?? ?? ?? ?? 48 8B 49 50 E8 ?? ?? ?? ?? 84 C0 0F 94 C0 48 83 C4 28 C3";
@@ -123,12 +122,12 @@ constexpr const char* kAobSaveManagerGlobalRelaxed =
     "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B F1 E8 ?? ?? ?? ?? 48 C7 86 A0 00 00 00 00 00 00 00 48 8B 05 ?? ?? ?? ?? 48 8B 38";
 
 constexpr const char* kAobRenderSlotRowStrict =
-    "48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B8 EE FF FF B8 48 12 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 41 0F B6 F8 48 8B F2 48 8B D9 45 33 FF 45 84 C0 74 ?? 48 85 D2 75 ?? "
-    "41 B4 01 EB ?? 45 32 E4";
+    "40 55 53 56 57 41 54 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F0 48 8B FA 48 8B D9 45 84 C0 74 ?? 48 85 D2 75 ?? "
+    "40 B6 01 EB ?? 40 32 F6";
 constexpr const char* kAobRenderSlotRowRelaxed =
-    "48 89 54 24 10 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B8 EE FF FF B8 48 12 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 41 0F B6 F8 48 8B F2 48 8B D9 45 33 FF";
+    "40 55 53 56 57 41 54 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F0 48 8B FA 48 8B D9";
 
 constexpr const char* kAobResolveUiScriptStrict =
     "48 89 5C 24 10 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8D AC 24 90 F6 FF FF 48 81 EC 70 0A 00 00 "
@@ -164,25 +163,25 @@ constexpr const char* kAobScopeSpecialReleaseRelaxed =
     "40 57 48 83 EC 70 48 8B F9 84 D2 0F 85 ?? ?? ?? ?? 48 89 5C 24 68 48 89 8C 24 90 00 00 00";
 
 constexpr std::array<SymbolDef, static_cast<std::size_t>(SymbolId::Count)> kSymbols{{
-    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1108C490, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
-    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x0CB07FD0, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
-    {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x034A02DF, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
-    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1111D6F0, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
-    {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x11046960, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
-    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08BEE030, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
-    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3E3D0, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
-    {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3DC60, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
-    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3F100, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
-    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3F660, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
-    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x002C0D10, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
-    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x00A235A0, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
-    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x02111B40, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
-    {SymbolId::RenderSlotRow, "RenderSlotRow", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D3FC20, {kAobRenderSlotRowStrict, kAobRenderSlotRowRelaxed, nullptr}},
-    {SymbolId::ResolveUiScript, "ResolveUiScript", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x033F0710, {kAobResolveUiScriptStrict, kAobResolveUiScriptRelaxed, nullptr}},
-    {SymbolId::SetControlText, "SetControlText", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x033EC7E0, {kAobSetControlTextStrict, kAobSetControlTextRelaxed, nullptr}},
-    {SymbolId::AcquireClientActorScope, "AcquireClientActorScope", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x006B9820, {kAobAcquireClientActorScopeStrict, kAobAcquireClientActorScopeRelaxed, nullptr}},
-    {SymbolId::AcquireClientUserActorScope, "AcquireClientUserActorScope", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x006B9BE0, {kAobAcquireClientUserActorScopeStrict, kAobAcquireClientUserActorScopeRelaxed, nullptr}},
-    {SymbolId::ScopeSpecialRelease, "ScopeSpecialRelease", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x010357B0, {kAobScopeSpecialReleaseStrict, kAobScopeSpecialReleaseRelaxed, nullptr}},
+    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x117011D0, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
+    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x0D00D460, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
+    {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035F9099, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
+    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x117AD330, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
+    {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x116D7380, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
+    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08F8F870, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
+    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBCB40, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
+    {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, false, ResolveMode::AobExecutable, 0x00DBC4A0, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
+    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBD770, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
+    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBDBA0, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
+    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x05F0B1D0, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
+    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x05F0B228, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
+    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x05F0B568, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
+    {SymbolId::RenderSlotRow, "RenderSlotRow", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBE2B0, {kAobRenderSlotRowStrict, kAobRenderSlotRowRelaxed, nullptr}},
+    {SymbolId::ResolveUiScript, "ResolveUiScript", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x035499B0, {kAobResolveUiScriptStrict, kAobResolveUiScriptRelaxed, nullptr}},
+    {SymbolId::SetControlText, "SetControlText", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x03545AB0, {kAobSetControlTextStrict, kAobSetControlTextRelaxed, nullptr}},
+    {SymbolId::AcquireClientActorScope, "AcquireClientActorScope", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x006EDBD0, {kAobAcquireClientActorScopeStrict, kAobAcquireClientActorScopeRelaxed, nullptr}},
+    {SymbolId::AcquireClientUserActorScope, "AcquireClientUserActorScope", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x006EDF90, {kAobAcquireClientUserActorScopeStrict, kAobAcquireClientUserActorScopeRelaxed, nullptr}},
+    {SymbolId::ScopeSpecialRelease, "ScopeSpecialRelease", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x010C15A0, {kAobScopeSpecialReleaseStrict, kAobScopeSpecialReleaseRelaxed, nullptr}},
 }};
 
 constexpr const char* kToastBridgeStrict =
