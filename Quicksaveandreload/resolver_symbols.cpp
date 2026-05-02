@@ -45,6 +45,7 @@ bool g_log_enabled = false;
 std::array<SymbolState, static_cast<std::size_t>(SymbolId::Count)> g_symbols{};
 std::array<bool, static_cast<std::size_t>(FeatureGroup::Count)> g_feature_enabled{};
 NativeToastBridge g_toast_bridge{};
+constexpr std::uintptr_t kToastBridgeKnownSiteRva = 0x0066B14E;
 
 constexpr const char* kAobDirectLocalSaveStrict =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
@@ -53,15 +54,21 @@ constexpr const char* kAobDirectLocalSaveRelaxed =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF";
 
 constexpr const char* kAobSavePrecheckStrict =
-    "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 56 41 57 48 89 E5 48 83 EC 50 4C 89 CF 4C 89 C6 49 89 D6 31 DB "
-    "48 8D 55 D8 49 8B 88 A0 00 00 00 E8 ?? ?? ?? ?? 90 44 0F B6 7D E8 48 8B 56 08 48 8D 4D 40";
+    "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 56 41 57 48 89 E5 48 83 EC 50 4D 8B F1 4C 8B F8 48 8B F2 31 DB "
+    "48 8D 55 D8 49 8B 88 A0 00 00 00 E8 ?? ?? ?? ?? 90 44 0F B6 7D E8 48 8B 57 08 48 8D 4D 40";
 constexpr const char* kAobSavePrecheckRelaxed =
-    "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 56 41 57 48 89 E5 48 83 EC 50 4C 89 CF 4C 89 C6 49 89 D6 31 DB";
+    "48 89 5C 24 10 48 89 4C 24 08 55 56 57 41 56 41 57 48 89 E5 48 83 EC 50 4D 8B F1 4C 8B F8 48 8B F2 31 DB";
 
 constexpr const char* kAobWeatherTickAnchorStrict =
     "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 88 D8 0E 00 00";
 constexpr const char* kAobWeatherTickAnchorRelaxed =
     "E8 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 40";
+
+constexpr const char* kAobWeatherFrameHeartbeatStrict =
+    "48 89 5C 24 08 55 56 57 41 56 41 57 48 83 EC 70 C5 F8 29 74 24 20 C5 F8 29 7C 24 10 C5 78 29 44 24 30 "
+    "C5 F8 28 F9 8B 81 18 3F 00 00";
+constexpr const char* kAobWeatherFrameHeartbeatRelaxed =
+    "48 89 5C 24 08 55 56 57 41 56 41 57 48 83 EC 70 C5 F8 29 74 24 20 C5 F8 29 7C 24 10 C5 78 29 44 24 30";
 
 constexpr const char* kAobSaveServiceDriverStrict =
     "48 89 4C 24 08 53 55 56 57 41 56 48 83 EC 60 48 89 D3 48 8B 02 48 8D 94 24 A0 00 00 00 "
@@ -76,10 +83,11 @@ constexpr const char* kAobServiceChildPollRelaxed =
     "48 89 5C 24 10 48 89 6C 24 20 56 57 41 56 48 83 EC 70 49 89 D6 48 89 CD 80 B9 95 00 00 00 00 75 ?? 48 8B 79 78 8B B1 80 00 00 00";
 
 constexpr const char* kAobInGameMenuLoadCoreStrict =
-    "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8D AC 24 50 FF FF FF 48 81 EC B0 01 00 00 "
-    "48 89 D3 48 89 CF 31 F6 89 74 24 20 40 38 B1 CA 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9 02";
+    "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
+    "40 38 B1 CA 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9 02 76 ?? 41 8D 41 9C 83 F8 08";
 constexpr const char* kAobInGameMenuLoadCoreRelaxed =
-    "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8D AC 24 50 FF FF FF 48 81 EC B0 01 00 00 48 89 D3 48 89 CF 31 F6";
+    "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
+    "40 38 B1 CA 0C 00 00";
 
 constexpr const char* kAobBuildVisibleMapStrict =
     "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 78 33 F6 89 B1 A0 01 00 00 "
@@ -101,10 +109,11 @@ constexpr const char* kAobLoadSelectedRefreshRelaxed =
     "48 89 5C 24 20 55 56 57 41 56 41 57 48 81 EC 30 0B 00 00 48 8B D9 48 8B 81 28 01 00 00 8B 88 18 01 00 00 39 8B A0 01 00 00";
 
 constexpr const char* kAobLoadModalHandlerStrict =
-    "48 89 5C 24 18 55 56 57 41 56 41 57 48 8D 6C 24 80 48 81 EC 80 01 00 00 49 8B F1 4C 8B F1 45 33 FF 48 8B 99 70 01 00 00 "
-    "48 3B DA 0F 85 ?? ?? ?? ?? 45 84 C0 0F 84 ?? ?? ?? ??";
+    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 30 FF FF FF 48 81 EC D0 01 00 00 4D 8B E1 4C 8B F1 45 33 ED "
+    "48 8B 99 70 01 00 00 48 3B DA 0F 85 ?? ?? ?? ?? 45 84 C0 0F 84 ?? ?? ?? ??";
 constexpr const char* kAobLoadModalHandlerRelaxed =
-    "48 89 5C 24 18 55 56 57 41 56 41 57 48 8D 6C 24 80 48 81 EC 80 01 00 00 49 8B F1 4C 8B F1 45 33 FF 48 8B 99 70 01 00 00 48 3B DA";
+    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 30 FF FF FF 48 81 EC D0 01 00 00 4D 8B E1 4C 8B F1 45 33 ED "
+    "48 8B 99 70 01 00 00 48 3B DA";
 
 constexpr const char* kAobGameServiceGlobalStrict =
     "48 83 EC 28 48 8B 0D ?? ?? ?? ?? 48 8B 49 50 E8 ?? ?? ?? ?? 84 C0 0F 94 C0 48 83 C4 28 C3";
@@ -122,12 +131,12 @@ constexpr const char* kAobSaveManagerGlobalRelaxed =
     "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B F1 E8 ?? ?? ?? ?? 48 C7 86 A0 00 00 00 00 00 00 00 48 8B 05 ?? ?? ?? ?? 48 8B 38";
 
 constexpr const char* kAobRenderSlotRowStrict =
-    "40 55 53 56 57 41 54 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F0 48 8B FA 48 8B D9 45 84 C0 74 ?? 48 85 D2 75 ?? "
+    "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 C0 EE FF FF B8 40 12 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 E1 45 0F B6 F8 48 8B FA 48 8B D9 45 84 C0 74 ?? 48 85 D2 75 ?? "
     "40 B6 01 EB ?? 40 32 F6";
 constexpr const char* kAobRenderSlotRowRelaxed =
-    "40 55 53 56 57 41 54 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F0 48 8B FA 48 8B D9";
+    "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 C0 EE FF FF B8 40 12 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 E1 45 0F B6 F8 48 8B FA 48 8B D9";
 
 constexpr const char* kAobResolveUiScriptStrict =
     "48 89 5C 24 10 48 89 74 24 18 55 57 41 54 41 56 41 57 48 8D AC 24 90 F6 FF FF 48 81 EC 70 0A 00 00 "
@@ -163,25 +172,26 @@ constexpr const char* kAobScopeSpecialReleaseRelaxed =
     "40 57 48 83 EC 70 48 8B F9 84 D2 0F 85 ?? ?? ?? ?? 48 89 5C 24 68 48 89 8C 24 90 00 00 00";
 
 constexpr std::array<SymbolDef, static_cast<std::size_t>(SymbolId::Count)> kSymbols{{
-    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x117011D0, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
-    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x0D00D460, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
-    {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035F9099, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
-    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x117AD330, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
-    {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x116D7380, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
-    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08F8F870, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
-    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBCB40, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
-    {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, false, ResolveMode::AobExecutable, 0x00DBC4A0, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
-    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBD770, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
-    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBDBA0, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
-    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x05F0B1D0, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
-    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x05F0B228, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
-    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x05F0B568, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
-    {SymbolId::RenderSlotRow, "RenderSlotRow", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00DBE2B0, {kAobRenderSlotRowStrict, kAobRenderSlotRowRelaxed, nullptr}},
-    {SymbolId::ResolveUiScript, "ResolveUiScript", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x035499B0, {kAobResolveUiScriptStrict, kAobResolveUiScriptRelaxed, nullptr}},
-    {SymbolId::SetControlText, "SetControlText", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x03545AB0, {kAobSetControlTextStrict, kAobSetControlTextRelaxed, nullptr}},
-    {SymbolId::AcquireClientActorScope, "AcquireClientActorScope", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x006EDBD0, {kAobAcquireClientActorScopeStrict, kAobAcquireClientActorScopeRelaxed, nullptr}},
-    {SymbolId::AcquireClientUserActorScope, "AcquireClientUserActorScope", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x006EDF90, {kAobAcquireClientUserActorScopeStrict, kAobAcquireClientUserActorScopeRelaxed, nullptr}},
-    {SymbolId::ScopeSpecialRelease, "ScopeSpecialRelease", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x010C15A0, {kAobScopeSpecialReleaseStrict, kAobScopeSpecialReleaseRelaxed, nullptr}},
+    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x11387950, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
+    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x01408310, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
+    {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035BFD19, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
+    {SymbolId::WeatherFrameHeartbeat, "WeatherFrameHeartbeat", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x0310200, {kAobWeatherFrameHeartbeatStrict, kAobWeatherFrameHeartbeatRelaxed, nullptr}},
+    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1141B260, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
+    {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1133B930, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
+    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08F29710, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
+    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D7F280, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
+    {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, false, ResolveMode::AobExecutable, 0x00D7EC00, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
+    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D7FEA0, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
+    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D802D0, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
+    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x05EF0670, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
+    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x05EF06C8, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
+    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x05EF0A00, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
+    {SymbolId::RenderSlotRow, "RenderSlotRow", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D80AF0, {kAobRenderSlotRowStrict, kAobRenderSlotRowRelaxed, nullptr}},
+    {SymbolId::ResolveUiScript, "ResolveUiScript", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x0350FED0, {kAobResolveUiScriptStrict, kAobResolveUiScriptRelaxed, nullptr}},
+    {SymbolId::SetControlText, "SetControlText", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x0350BF70, {kAobSetControlTextStrict, kAobSetControlTextRelaxed, nullptr}},
+    {SymbolId::AcquireClientActorScope, "AcquireClientActorScope", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x006DD540, {kAobAcquireClientActorScopeStrict, kAobAcquireClientActorScopeRelaxed, nullptr}},
+    {SymbolId::AcquireClientUserActorScope, "AcquireClientUserActorScope", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x006DD580, {kAobAcquireClientUserActorScopeStrict, kAobAcquireClientUserActorScopeRelaxed, nullptr}},
+    {SymbolId::ScopeSpecialRelease, "ScopeSpecialRelease", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x0108E350, {kAobScopeSpecialReleaseStrict, kAobScopeSpecialReleaseRelaxed, nullptr}},
 }};
 
 constexpr const char* kToastBridgeStrict =
@@ -420,6 +430,62 @@ bool ReadToastBridgeFields(std::uintptr_t site, std::uint32_t& outer_offset, std
     }
 }
 
+bool TryBuildToastBridgeCandidate(std::uintptr_t site, NativeToastBridge& out_candidate) {
+    out_candidate = {};
+    if (site == 0) {
+        return false;
+    }
+
+    std::uint32_t outer_offset = 0;
+    std::uint32_t manager_offset = 0;
+    if (!ReadToastBridgeFields(site, outer_offset, manager_offset)) {
+        return false;
+    }
+
+    std::uintptr_t create_fn = 0;
+    std::uintptr_t push_fn = 0;
+    std::uintptr_t release_fn = 0;
+    const auto* p = reinterpret_cast<const std::uint8_t*>(site);
+    for (std::size_t k = 18; k + 8 <= 0x90; ++k) {
+        if (!create_fn
+            && p[k + 0] == 0x48 && p[k + 1] == 0x8B && p[k + 2] == 0xC8
+            && p[k + 3] == 0xE8) {
+            create_fn = ReadCallTarget(site + k + 3);
+            continue;
+        }
+        if (!push_fn
+            && p[k + 0] == 0x48 && p[k + 1] == 0x8B && p[k + 2] == 0xCB
+            && p[k + 3] == 0xE8) {
+            push_fn = ReadCallTarget(site + k + 3);
+            continue;
+        }
+        if (!release_fn
+            && p[k + 0] == 0x48 && p[k + 1] == 0x8B
+            && p[k + 2] == 0x4C && p[k + 3] == 0x24) {
+            std::size_t call_offset = k + 5;
+            while (call_offset < 0x90 && p[call_offset] == 0x90) {
+                ++call_offset;
+            }
+            if (call_offset + 5 <= 0x90 && p[call_offset] == 0xE8) {
+                release_fn = ReadCallTarget(site + call_offset);
+            }
+        }
+    }
+
+    const std::uintptr_t root_global = ReadRipRelative(site);
+    if (root_global == 0 || outer_offset == 0 || manager_offset == 0 || create_fn == 0 || push_fn == 0 || release_fn == 0) {
+        return false;
+    }
+
+    out_candidate.root_global = reinterpret_cast<void*>(root_global);
+    out_candidate.outer_offset = outer_offset;
+    out_candidate.manager_offset = static_cast<std::ptrdiff_t>(manager_offset);
+    out_candidate.create_string = reinterpret_cast<void*>(create_fn);
+    out_candidate.push = reinterpret_cast<void*>(push_fn);
+    out_candidate.release_string = reinterpret_cast<void*>(release_fn);
+    return true;
+}
+
 std::uintptr_t ResolveAddressFromMatch(const SymbolDef& def, std::uintptr_t match) {
     if (match == 0) {
         return 0;
@@ -501,109 +567,48 @@ std::uintptr_t ResolveSymbol(const SymbolDef& def) {
 
 bool ResolveToastBridge() {
     g_toast_bridge = {};
-    const auto [bytes, mask] = ParsePattern(kToastBridgeStrict);
-    if (bytes.empty()) {
+    if (g_module == nullptr) {
         return false;
     }
 
-    const auto hits = ScanImageHits(bytes, mask, ResolveMode::AobExecutable, 256);
-    if (hits.empty()) {
-        Logf("[AOB] %-24s unresolved required=0\n", "NativeToastBridge");
-        return false;
-    }
+    auto* module = reinterpret_cast<std::uint8_t*>(g_module);
+    auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(module);
+    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(module + dos->e_lfanew);
+    auto* section = IMAGE_FIRST_SECTION(nt);
 
-    std::uintptr_t selected_site = 0;
-    NativeToastBridge selected{};
-    std::size_t valid_candidates = 0;
-    std::size_t distinct_candidates = 0;
-
-    for (const std::uintptr_t site : hits) {
-        std::uint32_t outer_offset = 0;
-        std::uint32_t manager_offset = 0;
-        if (!ReadToastBridgeFields(site, outer_offset, manager_offset)) {
+    for (int i = 0; i < nt->FileHeader.NumberOfSections; ++i, ++section) {
+        if ((section->Characteristics & IMAGE_SCN_MEM_EXECUTE) == 0) {
             continue;
         }
 
-        std::uintptr_t create_fn = 0;
-        std::uintptr_t push_fn = 0;
-        std::uintptr_t release_fn = 0;
-        const auto* p = reinterpret_cast<const std::uint8_t*>(site);
-        for (std::size_t k = 18; k + 8 <= 0x90; ++k) {
-            if (!create_fn
-                && p[k + 0] == 0x48 && p[k + 1] == 0x8B && p[k + 2] == 0xC8
-                && p[k + 3] == 0xE8) {
-                create_fn = ReadCallTarget(site + k + 3);
+        const std::uintptr_t base = reinterpret_cast<std::uintptr_t>(module) + section->VirtualAddress;
+        const auto* mem = reinterpret_cast<const std::uint8_t*>(base);
+        const std::size_t size = static_cast<std::size_t>(section->Misc.VirtualSize);
+        if (size < 0x60) {
+            continue;
+        }
+
+        for (std::size_t j = 0; j + 0x60 <= size; ++j) {
+            const auto* p = mem + j;
+            if (p[0] != 0x48 || p[1] != 0x8B || p[2] != 0x05) continue;
+            if (p[7] != 0x48 || p[8] != 0x8B || p[9] != 0x48) continue;
+            if (p[11] != 0x48 || p[12] != 0x8B || p[13] != 0x99) continue;
+
+            const std::uintptr_t site = base + j;
+            NativeToastBridge candidate{};
+            if (!TryBuildToastBridgeCandidate(site, candidate)) {
                 continue;
             }
-            if (!push_fn
-                && p[k + 0] == 0x48 && p[k + 1] == 0x8B && p[k + 2] == 0xCB
-                && p[k + 3] == 0xE8) {
-                push_fn = ReadCallTarget(site + k + 3);
-                continue;
-            }
-            if (!release_fn
-                && p[k + 0] == 0x48 && p[k + 1] == 0x8B
-                && p[k + 2] == 0x4C && p[k + 3] == 0x24) {
-                std::size_t call_offset = k + 5;
-                while (call_offset < 0x90 && p[call_offset] == 0x90) {
-                    ++call_offset;
-                }
-                if (call_offset + 5 <= 0x90 && p[call_offset] == 0xE8) {
-                    release_fn = ReadCallTarget(site + call_offset);
-                }
-            }
-        }
 
-        const std::uintptr_t root_global = ReadRipRelative(site);
-        if (root_global == 0 || outer_offset == 0 || manager_offset == 0 || create_fn == 0 || push_fn == 0 || release_fn == 0) {
-            continue;
-        }
-
-        NativeToastBridge candidate{};
-        candidate.root_global = reinterpret_cast<void*>(root_global);
-        candidate.outer_offset = outer_offset;
-        candidate.manager_offset = static_cast<std::ptrdiff_t>(manager_offset);
-        candidate.create_string = reinterpret_cast<void*>(create_fn);
-        candidate.push = reinterpret_cast<void*>(push_fn);
-        candidate.release_string = reinterpret_cast<void*>(release_fn);
-
-        ++valid_candidates;
-        if (selected_site == 0) {
-            selected_site = site;
-            selected = candidate;
-            ++distinct_candidates;
-            continue;
-        }
-
-        const bool same_candidate =
-            selected.root_global == candidate.root_global &&
-            selected.outer_offset == candidate.outer_offset &&
-            selected.manager_offset == candidate.manager_offset &&
-            selected.create_string == candidate.create_string &&
-            selected.push == candidate.push &&
-            selected.release_string == candidate.release_string;
-        if (!same_candidate) {
-            ++distinct_candidates;
-            if (distinct_candidates > 1) {
-                break;
-            }
+            g_toast_bridge = candidate;
+            Logf("[AOB] NativeToastBridge        mode=aob pattern=1 fallback=0 addr=%p\n",
+                 reinterpret_cast<void*>(site));
+            return true;
         }
     }
 
-    if (valid_candidates == 0 || selected_site == 0) {
-        Logf("[AOB] %-24s unresolved required=0\n", "NativeToastBridge");
-        return false;
-    }
-    if (distinct_candidates > 1) {
-        Logf("[AOB] %-24s mode=aob ambiguous-valid=%zu raw-hits=%zu\n", "NativeToastBridge", valid_candidates, hits.size());
-        return false;
-    }
-
-    g_toast_bridge = selected;
-    Logf("[AOB] %-24s mode=aob pattern=1 fallback=0 addr=%p\n",
-         "NativeToastBridge",
-         reinterpret_cast<void*>(selected_site));
-    return true;
+    Logf("[AOB] %-24s unresolved required=0\n", "NativeToastBridge");
+    return false;
 }
 
 const SymbolDef& Definition(SymbolId id) {

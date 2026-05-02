@@ -29,7 +29,7 @@ namespace {
 constexpr const char* kModName = "Quick Save and Reload";
 constexpr const wchar_t* kIniFileName = L"QuickSaveAndReload.ini";
 constexpr const wchar_t* kLogFileName = L"QuickSaveAndReload.log";
-constexpr const char* kBuildSignature = "1_0_4_STABLE";
+constexpr const char* kBuildSignature = "1_0_5_STABLE";
 
 constexpr std::size_t kSaveRecordSize = 0x58;
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x128;
@@ -204,7 +204,7 @@ using BuildVisibleMapFn = void(__fastcall*)(std::int64_t);
 using LoadSelectedRefreshFn = std::int64_t(__fastcall*)(std::int64_t);
 using LoadModalHandlerFn = void(__fastcall*)(std::uint64_t*, std::int64_t, char, unsigned int);
 
-using RenderSlotRowFn = std::int64_t(__fastcall*)(std::uint64_t*, unsigned int*, char);
+using RenderSlotRowFn = std::int64_t(__fastcall*)(std::uint64_t*, unsigned int*, char, char);
 using ResolveUiScriptFn = std::uint64_t(__fastcall*)(std::uint64_t, std::int64_t, char);
 using SetControlTextFn = std::int64_t(__fastcall*)(std::uint64_t, const void*);
 using RootTitleHandleOpenLoadViewFn = void(__fastcall*)(std::int64_t);
@@ -216,6 +216,7 @@ using SavePrecheckFn = int* (__fastcall*)(std::int64_t, int*, std::int64_t, unsi
 using NativeToastCreateStringFn = void* (__fastcall*)(const char*);
 using NativeToastPushFn = void (__fastcall*)(void*, void**, unsigned int);
 using NativeToastReleaseStringFn = void (__fastcall*)(void*);
+using WeatherFrameHeartbeatFn = std::int64_t (__fastcall*)(std::uint64_t, float);
 using SaveServiceDriverFn = std::int64_t(__fastcall*)(std::int64_t, std::uint64_t*);
 using ServiceChildPollFn = std::int32_t* (__fastcall*)(std::int64_t, std::int32_t*);
 using InGameMenuLoadCoreFn = std::int32_t* (__fastcall*)(std::int64_t, std::int32_t*, std::int64_t*, unsigned int);
@@ -243,6 +244,7 @@ NativeToastReleaseStringFn g_native_toast_release_string = nullptr;
 void** g_native_toast_root_global = nullptr;
 std::uint32_t g_native_toast_outer_offset = 0;
 std::ptrdiff_t g_native_toast_manager_offset = 0;
+WeatherFrameHeartbeatFn g_weather_frame_heartbeat_original = nullptr;
 SaveServiceDriverFn g_save_service_driver_original = nullptr;
 ServiceChildPollFn g_service_child_poll_original = nullptr;
 InGameMenuLoadCoreFn g_in_game_menu_load_core_original = nullptr;
@@ -933,7 +935,7 @@ bool ResolveDirectCalls() {
 
     const bool ok = g_render_slot_row != nullptr && g_resolve_ui_script != nullptr && g_set_control_text != nullptr
         && g_root_title_handle_open_load_view != nullptr
-        && g_acquire_client_actor_scope != nullptr && g_acquire_client_user_actor_scope != nullptr
+        && g_acquire_client_user_actor_scope != nullptr
         && g_scope_special_release != nullptr;
     if (!ok) {
         Log("[E] Failed to resolve direct helpers render=%p resolve=%p set_text=%p open_load_view=%p acquire_actor_scope=%p acquire_user_scope=%p special_release=%p\n",
@@ -947,6 +949,9 @@ bool ResolveDirectCalls() {
     }
     if (g_save_precheck == nullptr) {
         Log("[W] Save precheck helper unavailable; quick-save invalid-state filtering disabled\n");
+    }
+    if (g_acquire_client_actor_scope == nullptr) {
+        Log("[i] Client actor scope helper unavailable; optional legacy actor-scope path remains disabled\n");
     }
     if (g_world_env_manager_global == nullptr) {
         Log("[W] World env manager helper unavailable; transition gate will use native-ready only\n");
@@ -1863,9 +1868,6 @@ bool PassesNativeQuickActionReadyCheck(unsigned* out_code) {
     if (out_code != nullptr) {
         *out_code = 0;
     }
-    if (g_save_precheck == nullptr) {
-        return true;
-    }
 
     const std::uintptr_t actor = ResolveQuickSaveActor();
     if (actor == 0) {
@@ -1874,23 +1876,7 @@ bool PassesNativeQuickActionReadyCheck(unsigned* out_code) {
         }
         return false;
     }
-
-    __try {
-        int precheck_result = 0;
-        DirectSaveCallScratch precheck_scratch{};
-        auto* precheck_flags = reinterpret_cast<unsigned char*>(&precheck_scratch.flags_word);
-        int* precheck_status =
-            g_save_precheck(static_cast<std::int64_t>(actor), &precheck_result, static_cast<std::int64_t>(actor), precheck_flags);
-        if (out_code != nullptr) {
-            *out_code = static_cast<unsigned>(precheck_result);
-        }
-        return precheck_status != nullptr && precheck_result == 0;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        if (out_code != nullptr) {
-            *out_code = 0xFFFFFFFEu;
-        }
-        return false;
-    }
+    return true;
 }
 
 ResolvedWorldEnv ResolveWorldEnv() {
@@ -1959,7 +1945,8 @@ void TickGameplayActionGateOnGameThread() {
     }
 
     const ResolvedWorldEnv env = ResolveWorldEnv();
-    if (!(env.valid && env.cloud_node != 0 && env.wind_node != 0 && env.particle_mgr != 0)) {
+    const bool gameplay_root_ready = env.entity != 0 && env.weather_state != 0;
+    if (!gameplay_root_ready) {
         g_state.gameplay_ready_since_ms.store(0);
         return;
     }
@@ -2608,7 +2595,7 @@ std::int64_t __fastcall SetControlTextHook(std::uint64_t control, const void* te
 }
 
 
-std::int64_t __fastcall RenderSlotRowHook(std::uint64_t* row_script, unsigned int* record, char flag) {
+std::int64_t __fastcall RenderSlotRowHook(std::uint64_t* row_script, unsigned int* record, char flag, char flag2) {
     if (g_render_slot_row_original == nullptr) {
         return 0;
     }
@@ -2619,14 +2606,14 @@ std::int64_t __fastcall RenderSlotRowHook(std::uint64_t* row_script, unsigned in
         auto* shadow_record = reinterpret_cast<unsigned int*>(shadow_record_bytes);
         shadow_record[0] = 0;
 
-        const std::int64_t result = g_render_slot_row_original(row_script, shadow_record, flag);
+        const std::int64_t result = g_render_slot_row_original(row_script, shadow_record, flag, flag2);
         const std::uint64_t row_script_u64 = reinterpret_cast<std::uint64_t>(row_script);
         SetRowControlText(row_script_u64, kRowOffsetTypeText, LocalizedRowLabel());
         SetRowControlText(row_script_u64, kRowOffsetIndexName, "");
         return result;
     }
 
-    return g_render_slot_row_original(row_script, record, flag);
+    return g_render_slot_row_original(row_script, record, flag, flag2);
 }
 
 
@@ -2654,12 +2641,12 @@ void RenderReservedQuickRowScript(std::uint64_t row_script, const char* context)
         shadow_record[0] = 0;
 
         const ScopedReservedQuickRowTextOverride override_scope(row_script);
-        g_render_slot_row(reinterpret_cast<std::uint64_t*>(row_script), shadow_record, 0);
+        g_render_slot_row(reinterpret_cast<std::uint64_t*>(row_script), shadow_record, 0, 0);
         SetRowControlText(row_script, kRowOffsetTypeText, LocalizedRowLabel());
         SetRowControlText(row_script, kRowOffsetIndexName, "");
     } else {
         const ScopedReservedQuickRowTextOverride override_scope(row_script);
-        g_render_slot_row(reinterpret_cast<std::uint64_t*>(row_script), nullptr, 1);
+        g_render_slot_row(reinterpret_cast<std::uint64_t*>(row_script), nullptr, 1, 0);
         SetRowControlText(row_script, kRowOffsetTypeText, LocalizedRowLabel());
         SetRowControlText(row_script, kRowOffsetIndexName, LocalizedRowLabel());
     }
@@ -2681,13 +2668,20 @@ std::int64_t __fastcall SaveServiceDriverHook(std::int64_t self, std::uint64_t* 
     return g_save_service_driver_original(self, actor);
 }
 
+std::int64_t __fastcall WeatherFrameHeartbeatHook(std::uint64_t self, float dt) {
+    const std::int64_t result = g_weather_frame_heartbeat_original != nullptr
+        ? g_weather_frame_heartbeat_original(self, dt)
+        : 0;
+    TickGameplayActionGateOnGameThread();
+    return result;
+}
+
 std::int32_t* __fastcall ServiceChildPollHook(std::int64_t self, std::int32_t* out_result) {
     const DWORD tid = GetCurrentThreadId();
     const DWORD primed_tid = ResolveQuickSaveThreadId();
     const bool pending_quick_save = g_state.pending_quick_save.load();
     const std::uint32_t child_count = self != 0 ? *reinterpret_cast<const std::uint32_t*>(self + 128) : 0;
     const bool child_poll_active = self != 0 ? (*reinterpret_cast<const std::uint8_t*>(self + 148) != 0) : false;
-    TickGameplayActionGateOnGameThread();
     if (self != 0 && child_count == 46 && child_poll_active) {
         g_state.cached_service_save_actor.store(static_cast<std::uintptr_t>(self));
         g_state.cached_service_save_thread_id.store(tid);
@@ -2822,6 +2816,7 @@ bool InstallHooks() {
 
     bool ok = ResolveDirectCalls();
     ok &= CreateHookAtResolved(resolver::SymbolId::DirectLocalSave, &DirectLocalSaveHook, &g_direct_local_save_original, "DirectLocalSave");
+    ok &= CreateHookAtResolved(resolver::SymbolId::WeatherFrameHeartbeat, &WeatherFrameHeartbeatHook, &g_weather_frame_heartbeat_original, "WeatherFrameHeartbeat");
     ok &= CreateHookAtResolved(resolver::SymbolId::SaveServiceDriver, &SaveServiceDriverHook, &g_save_service_driver_original, "SaveServiceDriver");
     ok &= CreateHookAtResolved(resolver::SymbolId::ServiceChildPoll, &ServiceChildPollHook, &g_service_child_poll_original, "ServiceChildPoll");
     ok &= CreateHookAtResolved(resolver::SymbolId::InGameMenuLoadCore, &InGameMenuLoadCoreHook, &g_in_game_menu_load_core_original, "InGameMenuLoadCore");

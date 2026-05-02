@@ -11,6 +11,7 @@ enum class SymbolId : std::uint32_t {
     DirectLocalSave = 0,
     SavePrecheck,
     WeatherTickAnchor,
+    WeatherFrameHeartbeat,
     SaveServiceDriver,
     ServiceChildPoll,
     InGameMenuLoadCore,
