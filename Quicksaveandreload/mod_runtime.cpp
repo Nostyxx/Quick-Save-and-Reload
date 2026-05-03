@@ -29,7 +29,7 @@ namespace {
 constexpr const char* kModName = "Quick Save and Reload";
 constexpr const wchar_t* kIniFileName = L"QuickSaveAndReload.ini";
 constexpr const wchar_t* kLogFileName = L"QuickSaveAndReload.log";
-constexpr const char* kBuildSignature = "1_0_5_STABLE";
+constexpr const char* kBuildSignature = "1_0_6_STABLE";
 
 constexpr std::size_t kSaveRecordSize = 0x58;
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x128;

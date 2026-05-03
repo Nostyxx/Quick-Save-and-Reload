@@ -173,7 +173,7 @@ constexpr const char* kAobScopeSpecialReleaseRelaxed =
 
 constexpr std::array<SymbolDef, static_cast<std::size_t>(SymbolId::Count)> kSymbols{{
     {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x11387950, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
-    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x01408310, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
+    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x01408720, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
     {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035BFD19, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
     {SymbolId::WeatherFrameHeartbeat, "WeatherFrameHeartbeat", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x0310200, {kAobWeatherFrameHeartbeatStrict, kAobWeatherFrameHeartbeatRelaxed, nullptr}},
     {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1141B260, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
@@ -274,6 +274,8 @@ struct ScanStats {
     std::uintptr_t first = 0;
     std::size_t hits = 0;
 };
+
+constexpr std::size_t kSavePrecheckProbeWindow = 0x80;
 
 bool IsSectionEligible(const IMAGE_SECTION_HEADER& section, ResolveMode mode) {
     if (mode == ResolveMode::AobExecutable) {
@@ -417,6 +419,42 @@ std::uintptr_t ReadCallTarget(std::uintptr_t site) {
     }
 }
 
+bool MatchesSavePrecheckPostCallProbe(std::uintptr_t call_site) {
+    if (call_site == 0) {
+        return false;
+    }
+
+    __try {
+        const auto* p = reinterpret_cast<const std::uint8_t*>(call_site + 5);
+        const bool mov_eax_stack_disp8 =
+            p[0] == 0x8B && p[1] == 0x45 && p[3] == 0x85 && p[4] == 0xC0;
+        const bool mov_eax_stack_disp32 =
+            p[0] == 0x8B && p[1] == 0x85 && p[6] == 0x85 && p[7] == 0xC0;
+        return mov_eax_stack_disp8 || mov_eax_stack_disp32;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+std::uintptr_t DeriveSavePrecheckFromDirectLocalSave(std::uintptr_t direct_local_save) {
+    if (direct_local_save == 0) {
+        return 0;
+    }
+
+    for (std::size_t offset = 0; offset < kSavePrecheckProbeWindow; ++offset) {
+        const std::uintptr_t site = direct_local_save + offset;
+        const std::uintptr_t target = ReadCallTarget(site);
+        if (target == 0) {
+            continue;
+        }
+        if (MatchesSavePrecheckPostCallProbe(site)) {
+            return target;
+        }
+    }
+
+    return 0;
+}
+
 bool ReadToastBridgeFields(std::uintptr_t site, std::uint32_t& outer_offset, std::uint32_t& manager_offset) {
     if (site == 0) {
         return false;
@@ -499,6 +537,21 @@ std::uintptr_t ResolveAddressFromMatch(const SymbolDef& def, std::uintptr_t matc
 std::uintptr_t ResolveSymbol(const SymbolDef& def) {
     auto& state = g_symbols[static_cast<std::size_t>(def.id)];
     state = {};
+
+    if (def.id == SymbolId::SavePrecheck) {
+        const std::uintptr_t direct_local_save =
+            g_symbols[static_cast<std::size_t>(SymbolId::DirectLocalSave)].address;
+        const std::uintptr_t derived = DeriveSavePrecheckFromDirectLocalSave(direct_local_save);
+        if (derived != 0) {
+            state.address = derived;
+            state.resolved = true;
+            Logf("[AOB] %-24s mode=derived parent=%s addr=%p\n",
+                 def.name,
+                 "DirectLocalSave",
+                 reinterpret_cast<void*>(state.address));
+            return state.address;
+        }
+    }
 
     if (def.mode == ResolveMode::StaticRva) {
         state.address = g_base + def.known_rva;
