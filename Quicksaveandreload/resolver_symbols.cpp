@@ -71,10 +71,9 @@ constexpr const char* kAobWeatherFrameHeartbeatRelaxed =
     "48 89 5C 24 08 55 56 57 41 56 41 57 48 83 EC 70 C5 F8 29 74 24 20 C5 F8 29 7C 24 10 C5 78 29 44 24 30";
 
 constexpr const char* kAobSaveServiceDriverStrict =
-    "48 89 4C 24 08 53 55 56 57 41 56 48 83 EC 60 48 89 D3 48 8B 02 48 8D 94 24 A0 00 00 00 "
-    "48 89 D9 FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2 48 8D 3D ?? ?? ?? ?? 74 04 48 8B 7A";
+    "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2 74 04 4C 8B 7A 70";
 constexpr const char* kAobSaveServiceDriverRelaxed =
-    "48 89 4C 24 08 53 55 56 57 41 56 48 83 EC 60 48 89 D3 48 8B 02 48 8D 94 24 A0 00 00 00 48 89 D9 FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2";
+    "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2";
 
 constexpr const char* kAobServiceChildPollStrict =
     "48 89 5C 24 10 48 89 6C 24 20 56 57 41 56 48 83 EC 70 49 89 D6 48 89 CD 80 B9 95 00 00 00 00 75 ?? "
@@ -109,10 +108,8 @@ constexpr const char* kAobLoadSelectedRefreshRelaxed =
     "48 89 5C 24 20 55 56 57 41 56 41 57 48 81 EC 30 0B 00 00 48 8B D9 48 8B 81 28 01 00 00 8B 88 18 01 00 00 39 8B A0 01 00 00";
 
 constexpr const char* kAobLoadModalHandlerStrict =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 30 FF FF FF 48 81 EC D0 01 00 00 4D 8B E1 4C 8B F1 45 33 ED "
     "48 8B 99 70 01 00 00 48 3B DA 0F 85 ?? ?? ?? ?? 45 84 C0 0F 84 ?? ?? ?? ??";
 constexpr const char* kAobLoadModalHandlerRelaxed =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 30 FF FF FF 48 81 EC D0 01 00 00 4D 8B E1 4C 8B F1 45 33 ED "
     "48 8B 99 70 01 00 00 48 3B DA";
 
 constexpr const char* kAobGameServiceGlobalStrict =
@@ -175,14 +172,14 @@ constexpr std::array<SymbolDef, static_cast<std::size_t>(SymbolId::Count)> kSymb
     {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x11387950, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
     {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x01408720, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
     {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035BFD19, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
-    {SymbolId::WeatherFrameHeartbeat, "WeatherFrameHeartbeat", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x0310200, {kAobWeatherFrameHeartbeatStrict, kAobWeatherFrameHeartbeatRelaxed, nullptr}},
-    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1141B260, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
+    {SymbolId::WeatherFrameHeartbeat, "WeatherFrameHeartbeat", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x0878180, {kAobWeatherFrameHeartbeatStrict, kAobWeatherFrameHeartbeatRelaxed, nullptr}},
+    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x10F65EA0, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
     {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1133B930, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
     {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08F29710, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
     {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D7F280, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
     {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, false, ResolveMode::AobExecutable, 0x00D7EC00, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
     {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D7FEA0, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
-    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D802D0, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
+    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D93750, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
     {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x05EF0670, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
     {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x05EF06C8, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
     {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x05EF0A00, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
@@ -276,6 +273,8 @@ struct ScanStats {
 };
 
 constexpr std::size_t kSavePrecheckProbeWindow = 0x80;
+constexpr std::uintptr_t kSaveServiceDriverAnchorOffset = 0x28;
+constexpr std::uintptr_t kLoadModalHandlerAnchorOffset = 0x28;
 
 bool IsSectionEligible(const IMAGE_SECTION_HEADER& section, ResolveMode mode) {
     if (mode == ResolveMode::AobExecutable) {
@@ -455,6 +454,56 @@ std::uintptr_t DeriveSavePrecheckFromDirectLocalSave(std::uintptr_t direct_local
     return 0;
 }
 
+std::uintptr_t ResolveFromInteriorAnchor(const SymbolDef& def, std::uintptr_t anchor_offset) {
+    auto& state = g_symbols[static_cast<std::size_t>(def.id)];
+
+    for (std::size_t i = 0; i < def.patterns.size(); ++i) {
+        if (def.patterns[i] == nullptr) {
+            continue;
+        }
+        const auto [bytes, mask] = ParsePattern(def.patterns[i]);
+        if (bytes.empty()) {
+            continue;
+        }
+        const ScanStats stats = ScanImage(bytes, mask, def.mode);
+        if (stats.hits == 1 && stats.first >= anchor_offset) {
+            state.address = stats.first - anchor_offset;
+            state.matched_pattern = static_cast<std::uint8_t>(i + 1);
+            state.resolved = true;
+            Logf("[AOB] %-24s mode=derived pattern=%u anchor=0x%llX addr=%p\n",
+                 def.name,
+                 static_cast<unsigned>(state.matched_pattern),
+                 static_cast<unsigned long long>(anchor_offset),
+                 reinterpret_cast<void*>(state.address));
+            return state.address;
+        }
+        if (stats.hits > 1) {
+            Logf("[AOB] %-24s mode=derived pattern=%u ambiguous hits=%zu\n",
+                 def.name,
+                 static_cast<unsigned>(i + 1),
+                 stats.hits);
+        }
+    }
+
+    if (def.patterns[0] != nullptr && def.known_rva != 0) {
+        const auto [bytes, mask] = ParsePattern(def.patterns[0]);
+        const std::uintptr_t fallback_anchor = g_base + def.known_rva + anchor_offset;
+        if (MatchAt(fallback_anchor, bytes, mask)) {
+            state.address = g_base + def.known_rva;
+            state.used_known_fallback = true;
+            state.resolved = true;
+            Logf("[AOB] %-24s mode=derived pattern=0 fallback=1 anchor=0x%llX addr=%p rva=0x%llX\n",
+                 def.name,
+                 static_cast<unsigned long long>(anchor_offset),
+                 reinterpret_cast<void*>(state.address),
+                 static_cast<unsigned long long>(def.known_rva));
+            return state.address;
+        }
+    }
+
+    return 0;
+}
+
 bool ReadToastBridgeFields(std::uintptr_t site, std::uint32_t& outer_offset, std::uint32_t& manager_offset) {
     if (site == 0) {
         return false;
@@ -550,6 +599,20 @@ std::uintptr_t ResolveSymbol(const SymbolDef& def) {
                  "DirectLocalSave",
                  reinterpret_cast<void*>(state.address));
             return state.address;
+        }
+    }
+
+    if (def.id == SymbolId::SaveServiceDriver) {
+        const std::uintptr_t derived = ResolveFromInteriorAnchor(def, kSaveServiceDriverAnchorOffset);
+        if (derived != 0) {
+            return derived;
+        }
+    }
+
+    if (def.id == SymbolId::LoadModalHandler) {
+        const std::uintptr_t derived = ResolveFromInteriorAnchor(def, kLoadModalHandlerAnchorOffset);
+        if (derived != 0) {
+            return derived;
         }
     }
 
