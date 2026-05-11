@@ -89,6 +89,8 @@ struct LocalizedEntry {
     const wchar_t* en_us;
     const wchar_t* ko_kr;
     const wchar_t* fr_fr;
+    const wchar_t* pt_br;
+    const wchar_t* ru_ru;
 };
 
 enum class ControllerSource : std::uint8_t {
@@ -319,17 +321,17 @@ std::string NarrowWide(const wchar_t* text) {
 
 const wchar_t* ResolveLocalizedWide(TextId id, const std::wstring& locale) {
     static const LocalizedEntry kLocalizedEntries[] = {
-        { TextId::UiRowLabel, L"Quick Save", L"빠른 저장", L"Sauvegarde rapide" },
-        { TextId::ToastQuickSaveSuccess, L"QUICK SAVE SUCCESS", L"빠른 저장을 완료했습니다.", L"SUCCÈS DE LA SAUVEGARDE RAPIDE" },
-        { TextId::ToastQuickSaveFailed, L"QUICK SAVE FAILED", L"빠른 저장을 실패했습니다.", L"ÉCHEC DE LA SAUVEGARDE RAPIDE" },
-        { TextId::ToastSaveFunctionUnavailable, L"SAVE FUNCTION UNAVAILABLE", L"저장 기능을 사용할 수 없습니다.", L"SAUVEGARDE INDISPONIBLE" },
-        { TextId::ToastNoSaveActor, L"NO SAVE ACTOR", L"유효한 저장 객체를 찾을 수 없습니다.", L"PAS D'ENTITÉ DE SAUVEGARDE" },
-        { TextId::ToastSaveBlockedCode, L"SAVE BLOCKED (0x%08X)", L"저장이 차단되었습니다. (0x%08X)", L"SAUVEGARDE BLOQUÉE (0x%08X)" },
-        { TextId::ToastQuickSaveFailedCode, L"QUICK SAVE FAILED (%u)", L"빠른 저장을 실패했습니다. (%u)", L"ÉCHEC DE LA SAUVEGARDE RAPIDE (%u)" },
-        { TextId::ToastQuickLoadFailed, L"QUICK LOAD FAILED", L"빠른 불러오기에 실패했습니다.", L"ÉCHEC DU CHARGEMENT RAPIDE" },
-        { TextId::ToastLoadFunctionUnavailable, L"LOAD FUNCTION UNAVAILABLE", L"불러오기 기능을 사용할 수 없습니다.", L"CHARGEMENT INDISPONIBLE" },
-        { TextId::ToastNoQuickSaveFound, L"NO QUICK SAVE FOUND", L"빠른 저장 데이터를 찾을 수 없습니다.", L"SAUVEGARDE RAPIDE INTROUVABLE" },
-        { TextId::ToastGameStateUnavailable, L"GAME STATE UNAVAILABLE", L"게임 상태를 확인할 수 없습니다.", L"CONTEXTE DU JEU INDISPONIBLE" },
+        { TextId::UiRowLabel, L"Quick Save", L"빠른 저장", L"Sauvegarde rapide", L"Salvamento Rápido", L"Быстрое сохранение" },
+        { TextId::ToastQuickSaveSuccess, L"QUICK SAVE SUCCESS", L"빠른 저장을 완료했습니다.", L"SUCCÈS DE LA SAUVEGARDE RAPIDE", L"SALVAMENTO RÁPIDO CONCLUÍDO", L"Успешно сохранено" },
+        { TextId::ToastQuickSaveFailed, L"QUICK SAVE FAILED", L"빠른 저장을 실패했습니다.", L"ÉCHEC DE LA SAUVEGARDE RAPIDE", L"SALVAMENTO RÁPIDO FALHOU", L"Не удалось сохранить" },
+        { TextId::ToastSaveFunctionUnavailable, L"SAVE FUNCTION UNAVAILABLE", L"저장 기능을 사용할 수 없습니다.", L"SAUVEGARDE INDISPONIBLE", L"FUNÇÃO SALVAR INDISPONÍVEL", L"Сохранение недоступно" },
+        { TextId::ToastNoSaveActor, L"NO SAVE ACTOR", L"유효한 저장 객체를 찾을 수 없습니다.", L"PAS D'ENTITÉ DE SAUVEGARDE", L"SEM ATOR DE SALVAMENTO", L"Нет объекта для сохранения" },
+        { TextId::ToastSaveBlockedCode, L"SAVE BLOCKED (0x%08X)", L"저장이 차단되었습니다. (0x%08X)", L"SAUVEGARDE BLOQUÉE (0x%08X)", L"SALVAR BLOQUEADO (0x%08X)", L"Сохранение заблокировано (0x%08X)" },
+        { TextId::ToastQuickSaveFailedCode, L"QUICK SAVE FAILED (%u)", L"빠른 저장을 실패했습니다. (%u)", L"ÉCHEC DE LA SAUVEGARDE RAPIDE (%u)", L"SALVAMENTO RÁPIDO FALHOU (%u)", L"Не удалось сохранить (%u)" },
+        { TextId::ToastQuickLoadFailed, L"QUICK LOAD FAILED", L"빠른 불러오기에 실패했습니다.", L"ÉCHEC DU CHARGEMENT RAPIDE", L"FALHA NO CARREGAMENTO RÁPIDO", L"Не удалось загрузить" },
+        { TextId::ToastLoadFunctionUnavailable, L"LOAD FUNCTION UNAVAILABLE", L"불러오기 기능을 사용할 수 없습니다.", L"CHARGEMENT INDISPONIBLE", L"FUNÇÃO DE CARREGAMENTO INDISPONÍVEL", L"Загрузка недоступна" },
+        { TextId::ToastNoQuickSaveFound, L"NO QUICK SAVE FOUND", L"빠른 저장 데이터를 찾을 수 없습니다.", L"SAUVEGARDE RAPIDE INTROUVABLE", L"NENHUM SALVAMENTO RÁPIDO ENCONTRADO", L"Быстрое сохранение не найдено" },
+        { TextId::ToastGameStateUnavailable, L"GAME STATE UNAVAILABLE", L"게임 상태를 확인할 수 없습니다.", L"CONTEXTE DU JEU INDISPONIBLE", L"ESTADO DE JOGO INDISPONÍVEL", L"Состояние игры недоступно" },
     };
 
     const bool use_korean =
@@ -343,6 +345,19 @@ const wchar_t* ResolveLocalizedWide(TextId id, const std::wstring& locale) {
         || _wcsicmp(locale.c_str(), L"french") == 0
         || _wcsicmp(locale.c_str(), L"francais") == 0
         || _wcsicmp(locale.c_str(), L"français") == 0;
+    const bool use_portuguese_brazil =
+        _wcsicmp(locale.c_str(), L"pt_BR") == 0
+        || _wcsicmp(locale.c_str(), L"pt-BR") == 0
+        || _wcsicmp(locale.c_str(), L"ptbr") == 0
+        || _wcsicmp(locale.c_str(), L"pt") == 0
+        || _wcsicmp(locale.c_str(), L"portuguese") == 0
+        || _wcsicmp(locale.c_str(), L"brazilian_portuguese") == 0
+        || _wcsicmp(locale.c_str(), L"portuguese_brazil") == 0;
+    const bool use_russian =
+        _wcsicmp(locale.c_str(), L"ru_RU") == 0
+        || _wcsicmp(locale.c_str(), L"ru-RU") == 0
+        || _wcsicmp(locale.c_str(), L"ru") == 0
+        || _wcsicmp(locale.c_str(), L"russian") == 0;
 
     for (const auto& entry : kLocalizedEntries) {
         if (entry.id == id) {
@@ -351,6 +366,12 @@ const wchar_t* ResolveLocalizedWide(TextId id, const std::wstring& locale) {
             }
             if (use_french) {
                 return entry.fr_fr;
+            }
+            if (use_portuguese_brazil) {
+                return entry.pt_br;
+            }
+            if (use_russian) {
+                return entry.ru_ru;
             }
             return entry.en_us;
         }
@@ -636,7 +657,7 @@ void WriteDefaultConfig(const std::wstring& ini_path) {
         L"F1-F12, INSERT, DELETE, HOME, END, PGUP, PGDN, or single letter A-Z",
         ini_path.c_str());
     WritePrivateProfileStringW(L"Locale", L"Language", L"en_US", ini_path.c_str());
-    WritePrivateProfileStringW(L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR", ini_path.c_str());
+    WritePrivateProfileStringW(L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR, pt_BR, ru_RU", ini_path.c_str());
     WritePrivateProfileStringW(L"Hotkeys", L"ControllerHotkeyQuickSave", L"lb+a", ini_path.c_str());
     WritePrivateProfileStringW(L"Hotkeys", L"ControllerHotkeyQuickLoad", L"lb+y", ini_path.c_str());
     WritePrivateProfileStringW(
@@ -670,8 +691,8 @@ void LoadConfig() {
         L"_HotkeyOptions",
         L"F1-F12, INSERT, DELETE, HOME, END, PGUP, PGDN, or single letter A-Z");
     EnsureConfigValue(ini_path, L"Locale", L"Language", L"en_US");
-    EnsureConfigValue(ini_path, L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR");
-    WritePrivateProfileStringW(L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR", ini_path.c_str());
+    EnsureConfigValue(ini_path, L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR, pt_BR, ru_RU");
+    WritePrivateProfileStringW(L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR, pt_BR, ru_RU", ini_path.c_str());
     EnsureConfigValue(ini_path, L"Hotkeys", L"ControllerHotkeyQuickSave", L"lb+a");
     EnsureConfigValue(ini_path, L"Hotkeys", L"ControllerHotkeyQuickLoad", L"lb+y");
     EnsureConfigValue(

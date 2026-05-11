@@ -52,7 +52,7 @@ _HotkeyOptions=F1-F12, INSERT, DELETE, HOME, END, PGUP, PGDN, or single letter A
 
 [Locale]
 Language=en_US
-_LanguageOptions=en_US, ko_KR, fr_FR
+_LanguageOptions=en_US, ko_KR, fr_FR, pt_BR, ru_RU
 
 [Hotkeys]
 ControllerHotkeyQuickSave=lb+a
