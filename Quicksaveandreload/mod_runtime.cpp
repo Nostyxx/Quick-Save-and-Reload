@@ -29,7 +29,7 @@ namespace {
 constexpr const char* kModName = "Quick Save and Reload";
 constexpr const wchar_t* kIniFileName = L"QuickSaveAndReload.ini";
 constexpr const wchar_t* kLogFileName = L"QuickSaveAndReload.log";
-constexpr const char* kBuildSignature = "1_0_7_STABLE";
+constexpr const char* kBuildSignature = "1_1_STABLE";
 
 constexpr std::size_t kSaveRecordSize = 0x58;
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x128;
@@ -215,12 +215,15 @@ using AcquireClientUserActorScopeFn = ClientActorScope* (__fastcall*)(std::int64
 using ScopeSpecialReleaseFn = char(__fastcall*)(void*);
 using DirectLocalSaveFn = int* (__fastcall*)(std::int64_t, int*, int, unsigned char*);
 using SavePrecheckFn = int* (__fastcall*)(std::int64_t, int*, std::int64_t, unsigned char*);
+using DirectLocalSaveCoreFn = int* (__fastcall*)(std::int64_t, int*, unsigned int, std::int64_t, unsigned char*);
 using NativeToastCreateStringFn = void* (__fastcall*)(const char*);
 using NativeToastPushFn = void (__fastcall*)(void*, void**, unsigned int);
 using NativeToastReleaseStringFn = void (__fastcall*)(void*);
 using WeatherFrameHeartbeatFn = std::int64_t (__fastcall*)(std::uint64_t, float);
 using SaveServiceDriverFn = std::int64_t(__fastcall*)(std::int64_t, std::uint64_t*);
+using SaveServiceCommandLoopFn = std::int32_t* (__fastcall*)(std::int64_t, std::int32_t*, std::int64_t, std::int64_t);
 using ServiceChildPollFn = std::int32_t* (__fastcall*)(std::int64_t, std::int32_t*);
+using NativeQueueEnqueueFn = int* (__fastcall*)(std::int64_t, int*, unsigned int, std::int64_t, int, std::int64_t, void*, unsigned short);
 using InGameMenuLoadCoreFn = std::int32_t* (__fastcall*)(std::int64_t, std::int32_t*, std::int64_t*, unsigned int);
 
 BuildVisibleMapFn g_build_visible_map_original = nullptr;
@@ -240,6 +243,7 @@ AcquireClientUserActorScopeFn g_acquire_client_user_actor_scope = nullptr;
 ScopeSpecialReleaseFn g_scope_special_release = nullptr;
 DirectLocalSaveFn g_direct_local_save_original = nullptr;
 SavePrecheckFn g_save_precheck = nullptr;
+DirectLocalSaveCoreFn g_direct_local_save_core = nullptr;
 NativeToastCreateStringFn g_native_toast_create_string = nullptr;
 NativeToastPushFn g_native_toast_push = nullptr;
 NativeToastReleaseStringFn g_native_toast_release_string = nullptr;
@@ -248,7 +252,9 @@ std::uint32_t g_native_toast_outer_offset = 0;
 std::ptrdiff_t g_native_toast_manager_offset = 0;
 WeatherFrameHeartbeatFn g_weather_frame_heartbeat_original = nullptr;
 SaveServiceDriverFn g_save_service_driver_original = nullptr;
+SaveServiceCommandLoopFn g_save_service_command_loop_original = nullptr;
 ServiceChildPollFn g_service_child_poll_original = nullptr;
+NativeQueueEnqueueFn g_native_queue_enqueue_original = nullptr;
 InGameMenuLoadCoreFn g_in_game_menu_load_core_original = nullptr;
 std::uint64_t* g_world_env_manager_global = nullptr;
 bool g_xinput_resolve_attempted = false;
@@ -931,6 +937,19 @@ std::uintptr_t ReadRipRelativeAt(std::uintptr_t site) {
     }
 }
 
+std::uintptr_t FindFunctionStartViaUnwind(std::uintptr_t pc) {
+    if (pc == 0) {
+        return 0;
+    }
+
+    DWORD64 image_base = 0;
+    PRUNTIME_FUNCTION runtime_fn = RtlLookupFunctionEntry(static_cast<DWORD64>(pc), &image_base, nullptr);
+    if (runtime_fn == nullptr || image_base == 0) {
+        return 0;
+    }
+    return static_cast<std::uintptr_t>(image_base + runtime_fn->BeginAddress);
+}
+
 bool ResolveDirectCalls() {
     g_render_slot_row = ResolveCall<RenderSlotRowFn>(resolver::SymbolId::RenderSlotRow);
     g_resolve_ui_script = ResolveCall<ResolveUiScriptFn>(resolver::SymbolId::ResolveUiScript);
@@ -941,16 +960,27 @@ bool ResolveDirectCalls() {
     g_acquire_client_user_actor_scope = ResolveCall<AcquireClientUserActorScopeFn>(resolver::SymbolId::AcquireClientUserActorScope);
     g_scope_special_release = ResolveCall<ScopeSpecialReleaseFn>(resolver::SymbolId::ScopeSpecialRelease);
     g_save_precheck = ResolveCall<SavePrecheckFn>(resolver::SymbolId::SavePrecheck);
+    g_direct_local_save_core = ResolveCall<DirectLocalSaveCoreFn>(resolver::SymbolId::DirectLocalSaveCore);
     g_world_env_manager_global = nullptr;
     const std::uintptr_t weather_tick_anchor = resolver::Address(resolver::SymbolId::WeatherTickAnchor);
     if (weather_tick_anchor != 0) {
-        const std::uintptr_t env_site = weather_tick_anchor + 5;
+        const std::uintptr_t weather_tick_start = FindFunctionStartViaUnwind(weather_tick_anchor);
+        const std::uintptr_t env_site = weather_tick_start != 0 ? (weather_tick_start + 0xB4) : 0;
         __try {
-            if (*reinterpret_cast<const std::uint8_t*>(env_site) == 0x48) {
+            if (env_site != 0
+                && *reinterpret_cast<const std::uint8_t*>(env_site + 0) == 0x48
+                && *reinterpret_cast<const std::uint8_t*>(env_site + 1) == 0x8B
+                && *reinterpret_cast<const std::uint8_t*>(env_site + 2) == 0x0D) {
                 g_world_env_manager_global = reinterpret_cast<std::uint64_t*>(ReadRipRelativeAt(env_site));
             }
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             g_world_env_manager_global = nullptr;
+        }
+    }
+    if (g_world_env_manager_global == nullptr) {
+        const std::uintptr_t env_manager_global = resolver::Address(resolver::SymbolId::WorldEnvManagerGlobal);
+        if (env_manager_global != 0) {
+            g_world_env_manager_global = reinterpret_cast<std::uint64_t*>(env_manager_global);
         }
     }
 
@@ -970,6 +1000,9 @@ bool ResolveDirectCalls() {
     }
     if (g_save_precheck == nullptr) {
         Log("[W] Save precheck helper unavailable; quick-save invalid-state filtering disabled\n");
+    }
+    if (g_direct_local_save_core == nullptr) {
+        Log("[W] Direct save core helper unavailable; quick-save UI-thread reroute disabled\n");
     }
     if (g_acquire_client_actor_scope == nullptr) {
         Log("[i] Client actor scope helper unavailable; optional legacy actor-scope path remains disabled\n");
@@ -1002,6 +1035,9 @@ void ReleaseClientActorScope(ClientActorScope& scope);
 std::uintptr_t ResolveInGameLoadCoreFromService();
 std::uintptr_t ResolveQuickSaveActor();
 DWORD ResolveQuickSaveThreadId();
+std::uintptr_t ResolveSaveManagerWorker();
+bool TryAcquireSaveManagerWorkerGate(std::uintptr_t save_manager_worker);
+void ReleaseSaveManagerWorkerGate(std::uintptr_t save_manager_worker);
 bool PassesNativeQuickActionReadyCheck(unsigned* out_code);
 ResolvedWorldEnv ResolveWorldEnv();
 void ArmGameplayActionGate(const char* reason);
@@ -1026,6 +1062,7 @@ bool TryBeginQuickAction(QuickActionKind kind, const char* source, const char* p
 void EndQuickAction(QuickActionKind kind);
 int FindRecordIndexBySlot(int slot_id);
 void InvokeQuickSave(const char* source);
+void InvokeQuickSaveViaInnerCore(const char* source);
 bool InvokeQuickLoadViaInGameCore(const char* source);
 bool InvokeQuickLoadViaInGameCoreSafe(const char* source);
 void SetRowControlText(std::uint64_t row_script, std::ptrdiff_t offset, const char* text);
@@ -1450,12 +1487,32 @@ LRESULT CALLBACK HookedGameWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
     if (msg == g_state.quick_save_message && wparam == static_cast<WPARAM>(kQuickDispatchToken)) {
         const std::uintptr_t actor = ResolveQuickSaveActor();
         const DWORD save_tid = ResolveQuickSaveThreadId();
+        const DWORD current_tid = GetCurrentThreadId();
         if (save_tid == 0 || actor == 0) {
-            g_state.pending_quick_save.store(false);
-            Log("[quick-save] unavailable reason=no-save-context\n");
-            ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastQuickSaveFailed, "QUICK SAVE FAILED"));
+            Log("[quick-save] waiting reason=no-save-context\n");
             return 0;
         }
+
+        if (current_tid != save_tid) {
+            Log("[quick-save] deferred reason=thread-mismatch hwnd=%p actor=%p current_tid=%lu save_tid=%lu\n",
+                hwnd,
+                reinterpret_cast<void*>(actor),
+                static_cast<unsigned long>(current_tid),
+                static_cast<unsigned long>(save_tid));
+            return 0;
+        }
+
+        const bool claimed = g_state.pending_quick_save.exchange(false);
+        if (!claimed) {
+            return 0;
+        }
+
+        Log("[quick-save] message received hwnd=%p actor=%p current_tid=%lu save_tid=%lu\n",
+            hwnd,
+            reinterpret_cast<void*>(actor),
+            static_cast<unsigned long>(current_tid),
+            static_cast<unsigned long>(save_tid));
+        InvokeQuickSave("wndproc-ui");
         return 0;
     } else if (msg == g_state.quick_load_message && wparam == static_cast<WPARAM>(kQuickDispatchToken)) {
         const bool claimed = g_state.pending_quick_load.exchange(false);
@@ -1627,6 +1684,87 @@ void InvokeQuickSave(const char* source) {
     g_state.last_quick_save_dispatch_ms = now;
     const bool save_succeeded = result != nullptr && *out_result == 0;
     Log("[quick-save] source=%s slot=%d out=%u success=%d\n",
+        source,
+        g_state.config.quick_slot_id,
+        static_cast<unsigned>(*out_result),
+        save_succeeded ? 1 : 0);
+    if (save_succeeded && g_state.config.toast_notification_enabled) {
+        ShowNativeToast(LocalizedTextValue(TextId::ToastQuickSaveSuccess, "QUICK SAVE SUCCESS"));
+    } else if (!save_succeeded) {
+        ShowNativeToastFormatted(LocalizedTextValue(TextId::ToastQuickSaveFailedCode, "QUICK SAVE FAILED (%u)"), static_cast<unsigned>(*out_result));
+    }
+}
+
+void InvokeQuickSaveViaInnerCore(const char* source) {
+    const ULONGLONG now = GetTickCount64();
+    if (now < g_state.last_quick_save_dispatch_ms + kHotkeyCooldownMs) {
+        return;
+    }
+
+    if (!TryBeginQuickAction(QuickActionKind::Save, source, "invoke-inner-core")) {
+        return;
+    }
+
+    if (g_direct_local_save_core == nullptr) {
+        Log("[quick-save] source=%s unavailable reason=no-direct-save-core slot=%d\n", source, g_state.config.quick_slot_id);
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastSaveFunctionUnavailable, "SAVE FUNCTION UNAVAILABLE"));
+        EndQuickAction(QuickActionKind::Save);
+        return;
+    }
+
+    const std::uintptr_t actor = ResolveQuickSaveActor();
+    if (actor == 0) {
+        Log("[quick-save] source=%s unavailable reason=no-save-actor slot=%d\n", source, g_state.config.quick_slot_id);
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastNoSaveActor, "NO SAVE ACTOR"));
+        EndQuickAction(QuickActionKind::Save);
+        return;
+    }
+
+    int precheck_result = 0;
+    if (g_save_precheck != nullptr) {
+        DirectSaveCallScratch precheck_scratch{};
+        auto* precheck_flags = reinterpret_cast<unsigned char*>(&precheck_scratch.flags_word);
+        int* precheck_status =
+            g_save_precheck(static_cast<std::int64_t>(actor), &precheck_result, static_cast<std::int64_t>(actor), precheck_flags);
+        if (precheck_status == nullptr || precheck_result != 0) {
+            Log("[quick-save] source=%s unavailable reason=native-precheck slot=%d code=0x%08X\n",
+                source,
+                g_state.config.quick_slot_id,
+                static_cast<unsigned>(precheck_result));
+            ShowNativeToastFormatted(LocalizedTextValue(TextId::ToastSaveBlockedCode, "SAVE BLOCKED (0x%08X)"), static_cast<unsigned>(precheck_result));
+            EndQuickAction(QuickActionKind::Save);
+            return;
+        }
+    }
+
+    const std::uintptr_t save_manager_worker = ResolveSaveManagerWorker();
+    if (save_manager_worker == 0) {
+        Log("[quick-save] source=%s unavailable reason=no-save-manager-worker slot=%d\n", source, g_state.config.quick_slot_id);
+        ShowNativeToastFormatted("%s", LocalizedTextValue(TextId::ToastSaveFunctionUnavailable, "SAVE FUNCTION UNAVAILABLE"));
+        EndQuickAction(QuickActionKind::Save);
+        return;
+    }
+
+    if (!TryAcquireSaveManagerWorkerGate(save_manager_worker)) {
+        Log("[quick-save] source=%s unavailable reason=save-manager-busy slot=%d\n", source, g_state.config.quick_slot_id);
+        ShowNativeToastFormatted(LocalizedTextValue(TextId::ToastQuickSaveFailed, "QUICK SAVE FAILED"));
+        EndQuickAction(QuickActionKind::Save);
+        return;
+    }
+
+    g_state.quick_save_active.store(true);
+    DirectSaveCallScratch scratch{};
+    auto* flags = reinterpret_cast<unsigned char*>(&scratch.flags_word);
+    auto* out_result = &scratch.out_result;
+    const int* result =
+        g_direct_local_save_core(static_cast<std::int64_t>(save_manager_worker), out_result, g_state.config.quick_slot_id, static_cast<std::int64_t>(actor), flags);
+    g_state.quick_save_active.store(false);
+    ReleaseSaveManagerWorkerGate(save_manager_worker);
+    EndQuickAction(QuickActionKind::Save);
+
+    g_state.last_quick_save_dispatch_ms = now;
+    const bool save_succeeded = result != nullptr && *out_result == 0;
+    Log("[quick-save] source=%s mode=inner-core slot=%d out=%u success=%d\n",
         source,
         g_state.config.quick_slot_id,
         static_cast<unsigned>(*out_result),
@@ -1885,19 +2023,107 @@ DWORD ResolveQuickSaveThreadId() {
     return g_state.cached_service_save_thread_id.load();
 }
 
+std::uintptr_t ResolveSaveManagerWorker() {
+    __try {
+        const auto* save_manager_global = reinterpret_cast<const std::uint64_t*>(resolver::Address(resolver::SymbolId::SaveManagerGlobal));
+        const std::uint64_t save_manager_root = save_manager_global != nullptr ? *save_manager_global : 0;
+        if (save_manager_root == 0) {
+            return 0;
+        }
+
+        return static_cast<std::uintptr_t>(*reinterpret_cast<const std::uint64_t*>(save_manager_root + 0x10));
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+
+bool TryAcquireSaveManagerWorkerGate(std::uintptr_t save_manager_worker) {
+    if (save_manager_worker == 0) {
+        return false;
+    }
+
+    __try {
+        const std::uintptr_t lockable = *reinterpret_cast<const std::uint64_t*>(save_manager_worker);
+        if (lockable == 0) {
+            return false;
+        }
+
+        const std::uintptr_t vtable = *reinterpret_cast<const std::uint64_t*>(lockable);
+        if (vtable == 0) {
+            return false;
+        }
+
+        auto lock_fn = reinterpret_cast<void(__fastcall*)(std::uintptr_t)>(*reinterpret_cast<const std::uint64_t*>(vtable + 0x08));
+        auto unlock_fn = reinterpret_cast<void(__fastcall*)(std::uintptr_t)>(*reinterpret_cast<const std::uint64_t*>(vtable + 0x10));
+        if (lock_fn == nullptr || unlock_fn == nullptr) {
+            return false;
+        }
+
+        lock_fn(lockable);
+        bool acquired = false;
+        if (*reinterpret_cast<const std::uint8_t*>(save_manager_worker + 0x60) == 0) {
+            *reinterpret_cast<std::uint8_t*>(save_manager_worker + 0x60) = 1;
+            acquired = true;
+        }
+        unlock_fn(lockable);
+        return acquired;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+void ReleaseSaveManagerWorkerGate(std::uintptr_t save_manager_worker) {
+    if (save_manager_worker == 0) {
+        return;
+    }
+
+    __try {
+        const std::uintptr_t lockable = *reinterpret_cast<const std::uint64_t*>(save_manager_worker);
+        if (lockable == 0) {
+            return;
+        }
+
+        const std::uintptr_t vtable = *reinterpret_cast<const std::uint64_t*>(lockable);
+        if (vtable == 0) {
+            return;
+        }
+
+        auto lock_fn = reinterpret_cast<void(__fastcall*)(std::uintptr_t)>(*reinterpret_cast<const std::uint64_t*>(vtable + 0x08));
+        auto unlock_fn = reinterpret_cast<void(__fastcall*)(std::uintptr_t)>(*reinterpret_cast<const std::uint64_t*>(vtable + 0x10));
+        if (lock_fn == nullptr || unlock_fn == nullptr) {
+            return;
+        }
+
+        lock_fn(lockable);
+        *reinterpret_cast<std::uint8_t*>(save_manager_worker + 0x60) = 0;
+        unlock_fn(lockable);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 bool PassesNativeQuickActionReadyCheck(unsigned* out_code) {
     if (out_code != nullptr) {
         *out_code = 0;
     }
 
-    const std::uintptr_t actor = ResolveQuickSaveActor();
-    if (actor == 0) {
+    __try {
+        const auto* service_global = reinterpret_cast<const std::uint64_t*>(resolver::Address(resolver::SymbolId::GameServiceGlobal));
+        const auto* state_global = reinterpret_cast<const std::uint64_t*>(resolver::Address(resolver::SymbolId::GameStateGlobal));
+        const std::uint64_t service_root = service_global != nullptr ? *service_global : 0;
+        const std::uint64_t state_root = state_global != nullptr ? *state_global : 0;
+        if (service_root == 0 || state_root == 0) {
+            if (out_code != nullptr) {
+                *out_code = 0xFFFFFFFFu;
+            }
+            return false;
+        }
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
         if (out_code != nullptr) {
-            *out_code = 0xFFFFFFFFu;
+            *out_code = 0xFFFFFFFEu;
         }
         return false;
     }
-    return true;
 }
 
 ResolvedWorldEnv ResolveWorldEnv() {
@@ -2681,7 +2907,15 @@ void RenderReservedQuickRow(std::int64_t row_key, std::int64_t view_ctx) {
 std::int64_t __fastcall SaveServiceDriverHook(std::int64_t self, std::uint64_t* actor) {
     const DWORD tid = GetCurrentThreadId();
     const std::uintptr_t actor_u = reinterpret_cast<std::uintptr_t>(actor);
+    const std::uintptr_t previous_actor = g_state.cached_service_save_actor.load();
+    const DWORD previous_tid = g_state.cached_service_save_thread_id.load();
     if (actor_u != 0) {
+        if (actor_u != previous_actor || tid != previous_tid) {
+            Log("[save-service-driver] actor=%p tid=%lu self=%p\n",
+                reinterpret_cast<void*>(actor_u),
+                static_cast<unsigned long>(tid),
+                reinterpret_cast<void*>(self));
+        }
         g_state.cached_service_save_actor.store(actor_u);
         g_state.cached_service_save_thread_id.store(tid);
     }
@@ -2697,21 +2931,48 @@ std::int64_t __fastcall WeatherFrameHeartbeatHook(std::uint64_t self, float dt) 
     return result;
 }
 
+std::int32_t* __fastcall SaveServiceCommandLoopHook(
+    std::int64_t self,
+    std::int32_t* out_result,
+    std::int64_t arg3,
+    std::int64_t arg4) {
+    std::int32_t* result = g_save_service_command_loop_original != nullptr
+        ? g_save_service_command_loop_original(self, out_result, arg3, arg4)
+        : out_result;
+
+    const DWORD tid = GetCurrentThreadId();
+    const DWORD primed_tid = ResolveQuickSaveThreadId();
+    const std::uintptr_t save_actor = ResolveQuickSaveActor();
+    if (g_state.pending_quick_save.load() && primed_tid != 0 && tid == primed_tid && save_actor != 0) {
+        Log("[quick-save] pending observed source=save-service-command-loop actor=%p tid=%lu\n",
+            reinterpret_cast<void*>(save_actor),
+            static_cast<unsigned long>(tid));
+        const bool should_dispatch = g_state.pending_quick_save.exchange(false);
+        if (should_dispatch) {
+            Log("[quick-save] dispatch source=save-service-command-loop actor=%p tid=%lu\n",
+                reinterpret_cast<void*>(save_actor),
+                static_cast<unsigned long>(tid));
+            InvokeQuickSave("save-service-command-loop");
+        }
+    }
+
+    return result;
+}
+
 std::int32_t* __fastcall ServiceChildPollHook(std::int64_t self, std::int32_t* out_result) {
     const DWORD tid = GetCurrentThreadId();
     const DWORD primed_tid = ResolveQuickSaveThreadId();
     const bool pending_quick_save = g_state.pending_quick_save.load();
-    const std::uint32_t child_count = self != 0 ? *reinterpret_cast<const std::uint32_t*>(self + 128) : 0;
-    const bool child_poll_active = self != 0 ? (*reinterpret_cast<const std::uint8_t*>(self + 148) != 0) : false;
-    if (self != 0 && child_count == 46 && child_poll_active) {
-        g_state.cached_service_save_actor.store(static_cast<std::uintptr_t>(self));
-        g_state.cached_service_save_thread_id.store(tid);
-    }
-
     const std::uintptr_t save_actor = ResolveQuickSaveActor();
     if (pending_quick_save && primed_tid != 0 && tid == primed_tid && save_actor != 0) {
+        Log("[quick-save] pending observed source=service-child-poll actor=%p tid=%lu\n",
+            reinterpret_cast<void*>(save_actor),
+            static_cast<unsigned long>(tid));
         const bool should_dispatch = g_state.pending_quick_save.exchange(false);
         if (should_dispatch) {
+            Log("[quick-save] dispatch source=service-child-poll actor=%p tid=%lu\n",
+                reinterpret_cast<void*>(save_actor),
+                static_cast<unsigned long>(tid));
             InvokeQuickSave("service-child-poll");
         }
     }
@@ -2719,7 +2980,41 @@ std::int32_t* __fastcall ServiceChildPollHook(std::int64_t self, std::int32_t* o
     return g_service_child_poll_original(self, out_result);
 }
 
+int* __fastcall NativeQueueEnqueueHook(
+    std::int64_t queue,
+    int* out_result,
+    unsigned int delay,
+    std::int64_t context,
+    int arg5,
+    std::int64_t handler,
+    void* src,
+    unsigned short size) {
+    int* result = g_native_queue_enqueue_original(queue, out_result, delay, context, arg5, handler, src, size);
+
+    const DWORD tid = GetCurrentThreadId();
+    const DWORD primed_tid = ResolveQuickSaveThreadId();
+    const std::uintptr_t save_actor = ResolveQuickSaveActor();
+    if (g_state.pending_quick_save.load()
+        && !g_state.quick_save_active.load()
+        && primed_tid != 0
+        && tid == primed_tid
+        && save_actor != 0
+        && static_cast<std::uintptr_t>(context) == save_actor) {
+        const bool should_dispatch = g_state.pending_quick_save.exchange(false);
+        if (should_dispatch) {
+            InvokeQuickSave("native-queue-enqueue");
+        }
+    }
+
+    return result;
+}
+
 int* __fastcall DirectLocalSaveHook(std::int64_t actor, int* out_result, int slot, unsigned char* flags) {
+    Log("[direct-local-save] actor=%p slot=%d tid=%lu quick=%d\n",
+        reinterpret_cast<void*>(actor),
+        slot,
+        static_cast<unsigned long>(GetCurrentThreadId()),
+        g_state.quick_save_active.load() ? 1 : 0);
     g_state.cached_direct_save_actor.store(static_cast<std::uintptr_t>(actor));
     g_state.cached_direct_save_thread_id.store(GetCurrentThreadId());
     return g_direct_local_save_original(actor, out_result, slot, flags);
@@ -2839,7 +3134,21 @@ bool InstallHooks() {
     ok &= CreateHookAtResolved(resolver::SymbolId::DirectLocalSave, &DirectLocalSaveHook, &g_direct_local_save_original, "DirectLocalSave");
     ok &= CreateHookAtResolved(resolver::SymbolId::WeatherFrameHeartbeat, &WeatherFrameHeartbeatHook, &g_weather_frame_heartbeat_original, "WeatherFrameHeartbeat");
     ok &= CreateHookAtResolved(resolver::SymbolId::SaveServiceDriver, &SaveServiceDriverHook, &g_save_service_driver_original, "SaveServiceDriver");
+    if (resolver::Address(resolver::SymbolId::SaveServiceCommandLoop) != 0) {
+        ok &= CreateHookAtResolved(
+            resolver::SymbolId::SaveServiceCommandLoop,
+            &SaveServiceCommandLoopHook,
+            &g_save_service_command_loop_original,
+            "SaveServiceCommandLoop");
+    }
     ok &= CreateHookAtResolved(resolver::SymbolId::ServiceChildPoll, &ServiceChildPollHook, &g_service_child_poll_original, "ServiceChildPoll");
+    if (resolver::Address(resolver::SymbolId::NativeQueueEnqueue) != 0) {
+        ok &= CreateHookAtResolved(
+            resolver::SymbolId::NativeQueueEnqueue,
+            &NativeQueueEnqueueHook,
+            &g_native_queue_enqueue_original,
+            "NativeQueueEnqueue");
+    }
     ok &= CreateHookAtResolved(resolver::SymbolId::InGameMenuLoadCore, &InGameMenuLoadCoreHook, &g_in_game_menu_load_core_original, "InGameMenuLoadCore");
 
     if (resolver::IsFeatureEnabled(resolver::FeatureGroup::LoadUi) && ShouldInstallLoadUiHooks()) {

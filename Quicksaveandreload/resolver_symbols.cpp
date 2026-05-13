@@ -171,10 +171,14 @@ constexpr const char* kAobScopeSpecialReleaseRelaxed =
 constexpr std::array<SymbolDef, static_cast<std::size_t>(SymbolId::Count)> kSymbols{{
     {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x11387950, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
     {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x01408720, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
+    {SymbolId::DirectLocalSaveCore, "DirectLocalSaveCore", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x0141D660, {nullptr, nullptr, nullptr}},
     {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035BFD19, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
+    {SymbolId::WorldEnvManagerGlobal, "WorldEnvManagerGlobal", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x05E16458, {nullptr, nullptr, nullptr}},
     {SymbolId::WeatherFrameHeartbeat, "WeatherFrameHeartbeat", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x0878180, {kAobWeatherFrameHeartbeatStrict, kAobWeatherFrameHeartbeatRelaxed, nullptr}},
-    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x10F65EA0, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
+    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x116DBE30, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
+    {SymbolId::SaveServiceCommandLoop, "SaveServiceCommandLoop", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x0236F0D0, {nullptr, nullptr, nullptr}},
     {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1133B930, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
+    {SymbolId::NativeQueueEnqueue, "NativeQueueEnqueue", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x111E9FF0, {nullptr, nullptr, nullptr}},
     {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08F29710, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
     {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D7F280, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
     {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, false, ResolveMode::AobExecutable, 0x00D7EC00, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
@@ -273,7 +277,8 @@ struct ScanStats {
 };
 
 constexpr std::size_t kSavePrecheckProbeWindow = 0x80;
-constexpr std::uintptr_t kSaveServiceDriverAnchorOffset = 0x28;
+constexpr std::size_t kDirectLocalSaveCoreProbeWindow = 0x100;
+constexpr std::uintptr_t kSaveServiceDriverAnchorOffset = 0x20;
 constexpr std::uintptr_t kLoadModalHandlerAnchorOffset = 0x28;
 
 bool IsSectionEligible(const IMAGE_SECTION_HEADER& section, ResolveMode mode) {
@@ -435,6 +440,22 @@ bool MatchesSavePrecheckPostCallProbe(std::uintptr_t call_site) {
     }
 }
 
+bool MatchesDirectLocalSaveCorePostCallProbe(std::uintptr_t call_site) {
+    if (call_site == 0) {
+        return false;
+    }
+
+    __try {
+        const auto* p = reinterpret_cast<const std::uint8_t*>(call_site + 5);
+        std::size_t offset = p[0] == 0x90 ? 1 : 0;
+        return p[offset + 0] == 0x48 && p[offset + 1] == 0x8B && p[offset + 2] == 0x1F
+            && p[offset + 3] == 0x48 && p[offset + 4] == 0x89 && p[offset + 5] == 0x5D
+            && p[offset + 7] == 0x48 && p[offset + 8] == 0x8B && p[offset + 9] == 0x03;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 std::uintptr_t DeriveSavePrecheckFromDirectLocalSave(std::uintptr_t direct_local_save) {
     if (direct_local_save == 0) {
         return 0;
@@ -447,6 +468,25 @@ std::uintptr_t DeriveSavePrecheckFromDirectLocalSave(std::uintptr_t direct_local
             continue;
         }
         if (MatchesSavePrecheckPostCallProbe(site)) {
+            return target;
+        }
+    }
+
+    return 0;
+}
+
+std::uintptr_t DeriveDirectLocalSaveCoreFromDirectLocalSave(std::uintptr_t direct_local_save) {
+    if (direct_local_save == 0) {
+        return 0;
+    }
+
+    for (std::size_t offset = 0; offset < kDirectLocalSaveCoreProbeWindow; ++offset) {
+        const std::uintptr_t site = direct_local_save + offset;
+        const std::uintptr_t target = ReadCallTarget(site);
+        if (target == 0) {
+            continue;
+        }
+        if (MatchesDirectLocalSaveCorePostCallProbe(site)) {
             return target;
         }
     }
@@ -591,6 +631,21 @@ std::uintptr_t ResolveSymbol(const SymbolDef& def) {
         const std::uintptr_t direct_local_save =
             g_symbols[static_cast<std::size_t>(SymbolId::DirectLocalSave)].address;
         const std::uintptr_t derived = DeriveSavePrecheckFromDirectLocalSave(direct_local_save);
+        if (derived != 0) {
+            state.address = derived;
+            state.resolved = true;
+            Logf("[AOB] %-24s mode=derived parent=%s addr=%p\n",
+                 def.name,
+                 "DirectLocalSave",
+                 reinterpret_cast<void*>(state.address));
+            return state.address;
+        }
+    }
+
+    if (def.id == SymbolId::DirectLocalSaveCore) {
+        const std::uintptr_t direct_local_save =
+            g_symbols[static_cast<std::size_t>(SymbolId::DirectLocalSave)].address;
+        const std::uintptr_t derived = DeriveDirectLocalSaveCoreFromDirectLocalSave(direct_local_save);
         if (derived != 0) {
             state.address = derived;
             state.resolved = true;
