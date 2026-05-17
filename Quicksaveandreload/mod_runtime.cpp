@@ -29,7 +29,7 @@ namespace {
 constexpr const char* kModName = "Quick Save and Reload";
 constexpr const wchar_t* kIniFileName = L"QuickSaveAndReload.ini";
 constexpr const wchar_t* kLogFileName = L"QuickSaveAndReload.log";
-constexpr const char* kBuildSignature = "1_1_STABLE";
+constexpr const char* kBuildSignature = "1_2_STABLE";
 
 constexpr std::size_t kSaveRecordSize = 0x58;
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x128;
@@ -699,8 +699,6 @@ void LoadConfig() {
     EnsureConfigValue(ini_path, L"Locale", L"Language", L"en_US");
     EnsureConfigValue(ini_path, L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR, pt_BR, ru_RU");
     WritePrivateProfileStringW(L"Locale", L"_LanguageOptions", L"en_US, ko_KR, fr_FR, pt_BR, ru_RU", ini_path.c_str());
-    EnsureConfigValue(ini_path, L"Hotkeys", L"ControllerHotkeyQuickSave", L"lb+a");
-    EnsureConfigValue(ini_path, L"Hotkeys", L"ControllerHotkeyQuickLoad", L"lb+y");
     EnsureConfigValue(
         ini_path,
         L"Hotkeys",
@@ -728,21 +726,21 @@ void LoadConfig() {
     GetPrivateProfileStringW(
         L"Hotkeys",
         L"ControllerHotkeyQuickSave",
-        L"lb+a",
+        L"",
         hotkey_text,
         static_cast<DWORD>(std::size(hotkey_text)),
         ini_path.c_str());
     g_state.config.quick_save_controller_mask =
-        ParseControllerCombo(hotkey_text, WORD(XINPUT_GAMEPAD_LEFT_SHOULDER | XINPUT_GAMEPAD_A));
+        ParseControllerCombo(hotkey_text, 0);
     GetPrivateProfileStringW(
         L"Hotkeys",
         L"ControllerHotkeyQuickLoad",
-        L"lb+y",
+        L"",
         hotkey_text,
         static_cast<DWORD>(std::size(hotkey_text)),
         ini_path.c_str());
     g_state.config.quick_load_controller_mask =
-        ParseControllerCombo(hotkey_text, WORD(XINPUT_GAMEPAD_LEFT_SHOULDER | XINPUT_GAMEPAD_B));
+        ParseControllerCombo(hotkey_text, 0);
 
     g_state.config.enable_reserved_load_row = true;
     g_state.config.hide_reserved_slot_in_save_ui = true;

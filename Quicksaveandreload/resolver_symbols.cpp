@@ -45,7 +45,7 @@ bool g_log_enabled = false;
 std::array<SymbolState, static_cast<std::size_t>(SymbolId::Count)> g_symbols{};
 std::array<bool, static_cast<std::size_t>(FeatureGroup::Count)> g_feature_enabled{};
 NativeToastBridge g_toast_bridge{};
-constexpr std::uintptr_t kToastBridgeKnownSiteRva = 0x0066B14E;
+constexpr std::uintptr_t kToastBridgeKnownSiteRva = 0x0069647F;
 
 constexpr const char* kAobDirectLocalSaveStrict =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
@@ -169,30 +169,30 @@ constexpr const char* kAobScopeSpecialReleaseRelaxed =
     "40 57 48 83 EC 70 48 8B F9 84 D2 0F 85 ?? ?? ?? ?? 48 89 5C 24 68 48 89 8C 24 90 00 00 00";
 
 constexpr std::array<SymbolDef, static_cast<std::size_t>(SymbolId::Count)> kSymbols{{
-    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x11387950, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
-    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x01408720, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
-    {SymbolId::DirectLocalSaveCore, "DirectLocalSaveCore", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x0141D660, {nullptr, nullptr, nullptr}},
-    {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035BFD19, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
-    {SymbolId::WorldEnvManagerGlobal, "WorldEnvManagerGlobal", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x05E16458, {nullptr, nullptr, nullptr}},
-    {SymbolId::WeatherFrameHeartbeat, "WeatherFrameHeartbeat", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x0878180, {kAobWeatherFrameHeartbeatStrict, kAobWeatherFrameHeartbeatRelaxed, nullptr}},
-    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x116DBE30, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
-    {SymbolId::SaveServiceCommandLoop, "SaveServiceCommandLoop", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x0236F0D0, {nullptr, nullptr, nullptr}},
-    {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x1133B930, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
-    {SymbolId::NativeQueueEnqueue, "NativeQueueEnqueue", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x111E9FF0, {nullptr, nullptr, nullptr}},
-    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08F29710, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
-    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D7F280, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
-    {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, false, ResolveMode::AobExecutable, 0x00D7EC00, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
-    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D7FEA0, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
-    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D93750, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
-    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x05EF0670, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
-    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x05EF06C8, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
-    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x05EF0A00, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
-    {SymbolId::RenderSlotRow, "RenderSlotRow", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D80AF0, {kAobRenderSlotRowStrict, kAobRenderSlotRowRelaxed, nullptr}},
-    {SymbolId::ResolveUiScript, "ResolveUiScript", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x0350FED0, {kAobResolveUiScriptStrict, kAobResolveUiScriptRelaxed, nullptr}},
-    {SymbolId::SetControlText, "SetControlText", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x0350BF70, {kAobSetControlTextStrict, kAobSetControlTextRelaxed, nullptr}},
-    {SymbolId::AcquireClientActorScope, "AcquireClientActorScope", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x006DD540, {kAobAcquireClientActorScopeStrict, kAobAcquireClientActorScopeRelaxed, nullptr}},
-    {SymbolId::AcquireClientUserActorScope, "AcquireClientUserActorScope", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x006DD580, {kAobAcquireClientUserActorScopeStrict, kAobAcquireClientUserActorScopeRelaxed, nullptr}},
-    {SymbolId::ScopeSpecialRelease, "ScopeSpecialRelease", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x0108E350, {kAobScopeSpecialReleaseStrict, kAobScopeSpecialReleaseRelaxed, nullptr}},
+    {SymbolId::DirectLocalSave, "DirectLocalSave", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x112210B0, {kAobDirectLocalSaveStrict, kAobDirectLocalSaveRelaxed, nullptr}},
+    {SymbolId::SavePrecheck, "SavePrecheck", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x0141E4B0, {kAobSavePrecheckStrict, kAobSavePrecheckRelaxed, nullptr}},
+    {SymbolId::DirectLocalSaveCore, "DirectLocalSaveCore", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x0141E280, {nullptr, nullptr, nullptr}},
+    {SymbolId::WeatherTickAnchor, "WeatherTickAnchor", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x035F1999, {kAobWeatherTickAnchorStrict, kAobWeatherTickAnchorRelaxed, nullptr}},
+    {SymbolId::WorldEnvManagerGlobal, "WorldEnvManagerGlobal", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x05E18398, {nullptr, nullptr, nullptr}},
+    {SymbolId::WeatherFrameHeartbeat, "WeatherFrameHeartbeat", FeatureGroup::CoreLoad, true, ResolveMode::StaticRva, 0x0878390, {kAobWeatherFrameHeartbeatStrict, kAobWeatherFrameHeartbeatRelaxed, nullptr}},
+    {SymbolId::SaveServiceDriver, "SaveServiceDriver", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x112B21B0, {kAobSaveServiceDriverStrict, kAobSaveServiceDriverRelaxed, nullptr}},
+    {SymbolId::SaveServiceCommandLoop, "SaveServiceCommandLoop", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x0236EC80, {nullptr, nullptr, nullptr}},
+    {SymbolId::ServiceChildPoll, "ServiceChildPoll", FeatureGroup::CoreSave, true, ResolveMode::AobExecutable, 0x111EB740, {kAobServiceChildPollStrict, kAobServiceChildPollRelaxed, nullptr}},
+    {SymbolId::NativeQueueEnqueue, "NativeQueueEnqueue", FeatureGroup::Support, false, ResolveMode::AobExecutable, 0x00000000, {nullptr, nullptr, nullptr}},
+    {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x08DFC4C0, {kAobInGameMenuLoadCoreStrict, kAobInGameMenuLoadCoreRelaxed, nullptr}},
+    {SymbolId::BuildVisibleMap, "BuildVisibleMap", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D92AB0, {kAobBuildVisibleMapStrict, kAobBuildVisibleMapRelaxed, nullptr}},
+    {SymbolId::LoadListEventThunk, "LoadListEventThunk", FeatureGroup::LoadUi, false, ResolveMode::AobExecutable, 0x00D92430, {kAobLoadListEventThunkStrict, kAobLoadListEventThunkRelaxed, nullptr}},
+    {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D936D0, {kAobLoadSelectedRefreshStrict, kAobLoadSelectedRefreshRelaxed, nullptr}},
+    {SymbolId::LoadModalHandler, "LoadModalHandler", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D93B20, {kAobLoadModalHandlerStrict, kAobLoadModalHandlerRelaxed, nullptr}},
+    {SymbolId::GameServiceGlobal, "GameServiceGlobal", FeatureGroup::CoreLoad, true, ResolveMode::AobAnySection, 0x05F29B30, {kAobGameServiceGlobalStrict, kAobGameServiceGlobalRelaxed, nullptr}, true, 4},
+    {SymbolId::GameStateGlobal, "GameStateGlobal", FeatureGroup::LoadUi, true, ResolveMode::AobAnySection, 0x05F29B88, {kAobGameStateGlobalStrict, kAobGameStateGlobalRelaxed, nullptr}, true, 19},
+    {SymbolId::SaveManagerGlobal, "SaveManagerGlobal", FeatureGroup::Support, false, ResolveMode::AobAnySection, 0x05F29EC8, {kAobSaveManagerGlobalStrict, kAobSaveManagerGlobalRelaxed, nullptr}, true, 34},
+    {SymbolId::RenderSlotRow, "RenderSlotRow", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x00D94350, {kAobRenderSlotRowStrict, kAobRenderSlotRowRelaxed, nullptr}},
+    {SymbolId::ResolveUiScript, "ResolveUiScript", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x035419A0, {kAobResolveUiScriptStrict, kAobResolveUiScriptRelaxed, nullptr}},
+    {SymbolId::SetControlText, "SetControlText", FeatureGroup::LoadUi, true, ResolveMode::AobExecutable, 0x0353DA40, {kAobSetControlTextStrict, kAobSetControlTextRelaxed, nullptr}},
+    {SymbolId::AcquireClientActorScope, "AcquireClientActorScope", FeatureGroup::Support, false, ResolveMode::StaticRva, 0x006DD460, {kAobAcquireClientActorScopeStrict, kAobAcquireClientActorScopeRelaxed, nullptr}},
+    {SymbolId::AcquireClientUserActorScope, "AcquireClientUserActorScope", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x006E1EC0, {kAobAcquireClientUserActorScopeStrict, kAobAcquireClientUserActorScopeRelaxed, nullptr}},
+    {SymbolId::ScopeSpecialRelease, "ScopeSpecialRelease", FeatureGroup::CoreLoad, true, ResolveMode::AobExecutable, 0x010A3460, {kAobScopeSpecialReleaseStrict, kAobScopeSpecialReleaseRelaxed, nullptr}},
 }};
 
 constexpr const char* kToastBridgeStrict =
@@ -278,7 +278,7 @@ struct ScanStats {
 
 constexpr std::size_t kSavePrecheckProbeWindow = 0x80;
 constexpr std::size_t kDirectLocalSaveCoreProbeWindow = 0x100;
-constexpr std::uintptr_t kSaveServiceDriverAnchorOffset = 0x20;
+constexpr std::uintptr_t kSaveServiceDriverAnchorOffset = 0x28;
 constexpr std::uintptr_t kLoadModalHandlerAnchorOffset = 0x28;
 
 bool IsSectionEligible(const IMAGE_SECTION_HEADER& section, ResolveMode mode) {

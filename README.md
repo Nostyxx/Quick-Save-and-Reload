@@ -68,8 +68,8 @@ Notes:
 - `Language`: selects the built-in locale for UI label and toasts.
 - `HotkeyQuickSave`: keyboard quick save hotkey.
 - `HotkeyQuickLoad`: keyboard quick load hotkey.
-- `ControllerHotkeyQuickSave`: controller combo for quick save.
-- `ControllerHotkeyQuickLoad`: controller combo for quick load.
+- `ControllerHotkeyQuickSave`: controller combo for quick save. Leave blank or delete this key to disable.
+- `ControllerHotkeyQuickLoad`: controller combo for quick load. Leave blank or delete this key to disable.
 
 ## Build
 
