@@ -1,8 +1,6 @@
 #include "pch.h"
 
-#include <cwchar>
-
-#include "mod_runtime.h"
+#include "include/runtime.h"
 
 namespace {
 
@@ -15,34 +13,32 @@ bool IsTargetProcess() {
     }
 
     const wchar_t* name = std::wcsrchr(exe_path, L'\\');
-    name = (name != nullptr) ? (name + 1) : exe_path;
+    name = name != nullptr ? name + 1 : exe_path;
     return _wcsicmp(name, kTargetExeName) == 0;
 }
 
-DWORD WINAPI InitThreadProc(void* module) {
-    quicksave::Initialize(static_cast<HMODULE>(module));
+DWORD WINAPI InitializeThread(void* module) {
+    qsr::Initialize(static_cast<HMODULE>(module));
     return 0;
 }
 
-} 
+}  // namespace
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID reserved) {
+BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
-        DisableThreadLibraryCalls(hModule);
-
+        DisableThreadLibraryCalls(module);
         if (!IsTargetProcess()) {
             return TRUE;
         }
 
-        HANDLE thread = CreateThread(nullptr, 0, InitThreadProc, hModule, 0, nullptr);
+        HANDLE thread = CreateThread(nullptr, 0, &InitializeThread, module, 0, nullptr);
         if (thread != nullptr) {
             CloseHandle(thread);
         }
-    } else if (reason == DLL_PROCESS_DETACH) {
-        if (reserved == nullptr) {
-            quicksave::Shutdown();
-        }
+    } else if (reason == DLL_PROCESS_DETACH && reserved == nullptr) {
+        qsr::Shutdown();
     }
 
     return TRUE;
 }
+

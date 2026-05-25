@@ -2,9 +2,10 @@
 
 #include <Windows.h>
 
-namespace quicksave {
+namespace qsr {
 
 bool Initialize(HMODULE self_module);
 void Shutdown();
 
-}  // namespace quicksave
+}  // namespace qsr
+

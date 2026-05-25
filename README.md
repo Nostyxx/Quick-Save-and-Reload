@@ -1,44 +1,12 @@
-# Quick Save and Reload
+# QuickSaveAndReload
 
-ASI mod for `CrimsonDesert.exe` that adds a native-style quick save slot and hotkeys for quick save / quick load.
+Quick save and quick load mod for Crimson Desert.
 
-## Runtime Files
+## Install
 
-- `QuickSaveAndReload.asi`
-- `QuickSaveAndReload.ini`
-- `QuickSaveAndReload.log` (only when logging is enabled)
+Copy `QuickSaveAndReload.asi` next to `CrimsonDesert.exe`.
 
-## What It Does
-
-- reserves slot `108` as the dedicated quick save slot
-- shows that slot as `Quick Save` at the top of the load screen
-- hides the reserved quick slot from the normal save screen
-- uses the native quick-load confirmation modal by default
-
-## What It Hooks
-
-Current implementation resolves and hooks the native save/load and UI paths via AOB:
-
-- `DirectLocalSave`
-- `SaveServiceDriver`
-- `ServiceChildPoll`
-- `InGameMenuLoadCore`
-- `BuildVisibleMap`
-- `LoadSelectedRefresh`
-- `LoadModalHandler`
-- `RenderSlotRow`
-- `SetControlText`
-
-Behavior:
-- quick save writes to reserved slot `108`
-- quick load reads from reserved slot `108`
-- the top row in the load screen is rendered as `Quick Save`
-- the reserved slot is hidden from the normal save list
-- quick save / quick load are blocked during unsafe transition states
-
-## Config
-
-`QuickSaveAndReload.ini`
+Optional config file: `QuickSaveAndReload.ini`
 
 ```ini
 [General]
@@ -48,34 +16,19 @@ ToastNotification=1
 QuickLoadConfirmation=1
 HotkeyQuickSave=F5
 HotkeyQuickLoad=F6
-_HotkeyOptions=F1-F12, INSERT, DELETE, HOME, END, PGUP, PGDN, or single letter A-Z
-
-[Locale]
-Language=en_US
-_LanguageOptions=en_US, ko_KR, fr_FR, pt_BR, ru_RU
 
 [Hotkeys]
 ControllerHotkeyQuickSave=lb+a
 ControllerHotkeyQuickLoad=lb+y
-_ControllerHotkeyOptions=Use dpad_up/down/left/right + a/b/x/y/lb/rb/start/back
+
+[SaveRuntime]
+QuickSaveSlotCount=1
 ```
 
-Notes:
-- `EnableMod=1`: enables the mod.
-- `LogEnabled=1`: writes startup and runtime diagnostics.
-- `ToastNotification=1`: shows the native quick save success toast.
-- `QuickLoadConfirmation=1`: shows the native confirmation modal before quick load.
-- `Language`: selects the built-in locale for UI label and toasts.
-- `HotkeyQuickSave`: keyboard quick save hotkey.
-- `HotkeyQuickLoad`: keyboard quick load hotkey.
-- `ControllerHotkeyQuickSave`: controller combo for quick save. Leave blank or delete this key to disable.
-- `ControllerHotkeyQuickLoad`: controller combo for quick load. Leave blank or delete this key to disable.
+`QuickSaveSlotCount` supports `1` to `8`.
 
 ## Build
 
-- Solution: `Quicksaveandreload.slnx`
-- Project: `Quicksaveandreload/Quicksaveandreload.vcxproj`
-- Recommended: `Release | x64`
+Open `QuickSaveAndReload.slnx` and build `Release | x64`.
 
-Compiler output is `Quicksaveandreload.dll`.  
-Deployment runtime name is `QuickSaveAndReload.asi`.
+Output: `QuickSaveAndReload.asi`
