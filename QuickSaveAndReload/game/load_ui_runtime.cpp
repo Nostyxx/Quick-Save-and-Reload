@@ -8,18 +8,14 @@
 #include "include/resolver.h"
 #include "include/text_runtime.h"
 
-#include <array>
-#include <cstring>
-
 namespace qsr::load_ui_runtime {
 namespace {
 
 using RenderSlotRowFn = std::int64_t(__fastcall*)(std::uint64_t*, unsigned int*, char, char);
 using SetControlTextFn = std::int64_t(__fastcall*)(std::uint64_t, const char*);
 
-constexpr std::size_t kSaveRecordSize = 0x58;
-constexpr std::ptrdiff_t kRowOffsetTypeText = 0x340;
-constexpr std::ptrdiff_t kRowOffsetIndexName = 0x348;
+constexpr std::ptrdiff_t kRowOffsetTypeText = 0x360;
+constexpr std::ptrdiff_t kRowOffsetIndexName = 0x368;
 
 RenderSlotRowFn g_render_slot_row_original = nullptr;
 SetControlTextFn g_set_control_text = nullptr;
@@ -62,12 +58,7 @@ std::int64_t __fastcall RenderSlotRowHook(std::uint64_t* row_script, unsigned in
             : 0;
     }
 
-    alignas(16) std::array<std::uint8_t, kSaveRecordSize> shadow_record_bytes{};
-    std::memcpy(shadow_record_bytes.data(), record, shadow_record_bytes.size());
-    auto* shadow_record = reinterpret_cast<unsigned int*>(shadow_record_bytes.data());
-    shadow_record[0] = 0;
-
-    const std::int64_t result = g_render_slot_row_original(row_script, shadow_record, flag, flag2);
+    const std::int64_t result = g_render_slot_row_original(row_script, record, flag, flag2);
     const std::uint64_t row_script_u64 = reinterpret_cast<std::uint64_t>(row_script);
     SetRowControlText(row_script_u64, kRowOffsetTypeText, text::Get(text::TextId::UiRowLabel));
     SetRowControlText(row_script_u64, kRowOffsetIndexName, "");

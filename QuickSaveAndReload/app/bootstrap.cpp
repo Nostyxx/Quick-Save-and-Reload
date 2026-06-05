@@ -12,6 +12,8 @@
 namespace qsr {
 namespace {
 
+constexpr const char* kVersion = "1.4";
+
 std::atomic<bool> g_initialized{false};
 
 }  // namespace
@@ -30,7 +32,7 @@ bool Initialize(HMODULE self_module) {
     }
 
     log::Write("===============================================\n");
-    log::Write("  Quick Save and Reload\n");
+    log::Write("  Quick Save and Reload v%s\n", kVersion);
     log::Write("===============================================\n\n");
     log::Write("[startup] base=%p configuration=%s enabled=%d log=%d toast=%d quick_load_confirm=%d quick_count=%d save_vk=%d load_vk=%d save_pad=0x%04X load_pad=0x%04X locale=%ls\n",
         reinterpret_cast<void*>(GetModuleHandleW(nullptr)),

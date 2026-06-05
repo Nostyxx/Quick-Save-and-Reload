@@ -2,6 +2,8 @@
 
 Quick save and quick load mod for Crimson Desert.
 
+Version: 1.4
+
 ## Install
 
 Copy `QuickSaveAndReload.asi` next to `CrimsonDesert.exe`.

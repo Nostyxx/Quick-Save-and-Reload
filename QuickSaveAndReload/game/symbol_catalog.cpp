@@ -7,13 +7,15 @@ namespace {
 
 constexpr const char* kDirectLocalSaveStrict =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
-    "48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF 80 3D ?? ?? ?? ?? 00 75 ?? C7 02 00 00 00 00 E9 ?? ?? ?? ??";
+    "48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF 80 3D ?? ?? ?? ?? 00 75 ?? "
+    "BE ?? ?? ?? ?? 2B 35 ?? ?? ?? ?? 89 32 E9 ?? ?? ?? ??";
 constexpr const char* kDirectLocalSaveRelaxed =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
     "48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF";
 
 constexpr const char* kSaveServiceDriverStrict =
-    "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2 74 04 4C 8B 7A 70";
+    "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2 "
+    "48 8D 3D ?? ?? ?? ?? 74 ?? 48 8B 7A 70";
 constexpr const char* kSaveServiceDriverRelaxed =
     "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2";
 
@@ -40,10 +42,10 @@ constexpr const char* kBuildVisibleMapRelaxed =
     "33 F6 89 B1 C8 01 00 00 48 8D B9 C0 01 00 00";
 
 constexpr const char* kLoadSelectedRefreshStrict =
-    "48 89 5C 24 20 55 56 57 41 56 41 57 48 81 EC 30 0B 00 00 48 8B D9 48 8B 81 50 01 00 00 "
-    "8B 88 18 01 00 00 39 8B C8 01 00 00 0F 86 ?? ?? ?? ?? 48 8B 83 C0 01 00 00 8B 0C 88";
+    "48 89 5C 24 20 55 56 57 41 56 41 57 48 81 EC 40 0C 00 00 48 8B D9 48 8B 81 50 01 00 00 "
+    "8B 88 18 01 00 00 39 8B C8 01 00 00 0F 86 ?? ?? ?? ?? 48 8B 83 C0 01 00 00 8B 0C 88 83 F9 FF";
 constexpr const char* kLoadSelectedRefreshRelaxed =
-    "48 89 5C 24 20 55 56 57 41 56 41 57 48 81 EC 30 0B 00 00 48 8B D9 48 8B 81 50 01 00 00 "
+    "48 89 5C 24 20 55 56 57 41 56 41 57 48 81 EC 40 0C 00 00 48 8B D9 48 8B 81 50 01 00 00 "
     "8B 88 18 01 00 00 39 8B C8 01 00 00";
 
 constexpr const char* kLoadModalHandlerStrict =

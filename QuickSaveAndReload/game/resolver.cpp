@@ -162,6 +162,11 @@ bool ScanCandidateSignatures(HMODULE game_module) {
             log::Write("[resolver] %-20s status=Ambiguous hits=%zu validation=blocked\n",
                 definition.name,
                 result.hit_count);
+        } else if (result.status == Status::Candidate) {
+            log::Write("[resolver] %-20s status=Candidate pattern=%zu address=%p validation=pending\n",
+                definition.name,
+                result.matched_pattern,
+                reinterpret_cast<void*>(result.address));
         } else {
             log::Write("[resolver] %-20s status=Unresolved validation=blocked\n", definition.name);
         }
