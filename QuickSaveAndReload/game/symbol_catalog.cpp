@@ -8,7 +8,7 @@ namespace {
 constexpr const char* kDirectLocalSaveStrict =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
     "48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF 80 3D ?? ?? ?? ?? 00 75 ?? "
-    "BE ?? ?? ?? ?? 2B 35 ?? ?? ?? ?? 89 32 E9 ?? ?? ?? ??";
+    "C7 02 00 00 00 00 E9 ?? ?? ?? ??";
 constexpr const char* kDirectLocalSaveRelaxed =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
     "48 89 E5 48 83 EC 60 4D 89 CD 45 89 C4 49 89 D6 49 89 CF";
