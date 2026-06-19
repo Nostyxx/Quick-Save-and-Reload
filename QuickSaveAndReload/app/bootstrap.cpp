@@ -12,7 +12,7 @@
 namespace qsr {
 namespace {
 
-constexpr const char* kVersion = "1.5";
+constexpr const char* kVersion = "1.6";
 
 std::atomic<bool> g_initialized{false};
 
