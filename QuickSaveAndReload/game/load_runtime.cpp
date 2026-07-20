@@ -11,9 +11,9 @@ namespace qsr::load_runtime {
 namespace {
 
 using InGameMenuLoadCoreFn = std::int32_t* (__fastcall*)(std::int64_t, std::int32_t*, std::int64_t*, unsigned int);
-using BuildVisibleMapFn = std::int64_t(__fastcall*)(std::int64_t);
+using BuildVisibleMapFn = void(__fastcall*)(std::int64_t, std::int64_t, unsigned int, char);
 using LoadSelectedRefreshFn = std::int64_t(__fastcall*)(std::int64_t);
-using LoadModalHandlerFn = void(__fastcall*)(std::uint64_t*, std::int64_t, char, unsigned int);
+using LoadModalHandlerFn = void(__fastcall*)(std::uint64_t*, std::int64_t, char, std::int64_t, unsigned int);
 
 constexpr std::ptrdiff_t kRootOffsetListWidget = 0x150;
 constexpr std::ptrdiff_t kRootOffsetSecondaryListWidget = 0x158;
@@ -26,6 +26,17 @@ constexpr std::ptrdiff_t kRootOffsetSecondaryVisibleCount = 0x1F0;
 constexpr std::ptrdiff_t kRootOffsetMode = 0x208;
 constexpr std::ptrdiff_t kListWidgetSelectedRowOffset = 0x118;
 constexpr std::uint32_t kMaxVisibleRows = 64;
+
+constexpr std::ptrdiff_t kNewRootOffsetCatalogListWidget = 0x158;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleListWidget = 0x160;
+constexpr std::ptrdiff_t kNewRootOffsetActiveLoadModal = 0x1E0;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexMap = 0x1F0;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexCount = 0x1F8;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleRecords = 0x200;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleRecordCount = 0x208;
+constexpr std::ptrdiff_t kNewRootOffsetMode = 0x220;
+constexpr std::ptrdiff_t kNewListWidgetSelectedRowOffset = 0x120;
+constexpr std::uint32_t kNewVisibleRecordSize = 0x50;
 
 InGameMenuLoadCoreFn g_in_game_menu_load_core_original = nullptr;
 BuildVisibleMapFn g_build_visible_map_original = nullptr;
@@ -66,6 +77,30 @@ bool IsLikelyLoadUiRoot(std::uintptr_t root) {
     }
 }
 
+bool IsLikelyNewLoadUiRoot(std::uintptr_t root) {
+    if (root == 0) {
+        return false;
+    }
+
+    __try {
+        const std::uintptr_t vtable = *reinterpret_cast<const std::uintptr_t*>(root);
+        const std::uintptr_t catalog_list =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetCatalogListWidget);
+        const std::uintptr_t visible_list =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetVisibleListWidget);
+        const std::uint32_t visible_count =
+            *reinterpret_cast<const std::uint32_t*>(root + kNewRootOffsetVisibleRecordCount);
+        const std::uint8_t mode = *reinterpret_cast<const std::uint8_t*>(root + kNewRootOffsetMode);
+        return vtable != 0
+            && catalog_list != 0
+            && visible_list != 0
+            && visible_count <= kMaxVisibleRows
+            && mode <= 2;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
 bool IsLoadStyleMode(std::uintptr_t root) {
     if (root == 0) {
         return false;
@@ -73,6 +108,19 @@ bool IsLoadStyleMode(std::uintptr_t root) {
 
     __try {
         return *reinterpret_cast<const std::uint8_t*>(root + kRootOffsetMode) == 2;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+bool IsNewLoadStyleMode(std::uintptr_t root) {
+    if (root == 0) {
+        return false;
+    }
+
+    __try {
+        const std::uint8_t mode = *reinterpret_cast<const std::uint8_t*>(root + kNewRootOffsetMode);
+        return mode == 1 || mode == 2;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -259,6 +307,90 @@ bool HideReservedQuickSlotFromSaveUi(
     }
 }
 
+bool TryGetNewVisibleIndexMap(std::uintptr_t root, int*& visible_map, std::uint32_t& visible_count) {
+    visible_map = nullptr;
+    visible_count = 0;
+    if (!IsLikelyNewLoadUiRoot(root)) {
+        return false;
+    }
+
+    __try {
+        visible_map = reinterpret_cast<int*>(
+            *reinterpret_cast<std::uintptr_t*>(root + kNewRootOffsetVisibleIndexMap));
+        visible_count = *reinterpret_cast<const std::uint32_t*>(root + kNewRootOffsetVisibleIndexCount);
+        return visible_map != nullptr && visible_count != 0 && visible_count <= kMaxVisibleRows;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        visible_map = nullptr;
+        visible_count = 0;
+        return false;
+    }
+}
+
+bool RewriteNewVisibleIndexMapForQuickSlots(std::uintptr_t root) {
+    quick_slots::RecordInfo quick_records[quick_slots::kMaxQuickSlotCount] = {};
+    const int quick_record_count = quick_slots::CollectExistingQuickSlotsNewestFirst(
+        quick_records,
+        static_cast<int>(std::size(quick_records)));
+    if (quick_record_count <= 0) {
+        return false;
+    }
+
+    __try {
+        int* visible_map = nullptr;
+        std::uint32_t visible_count = 0;
+        if (!TryGetNewVisibleIndexMap(root, visible_map, visible_count)) {
+            return false;
+        }
+
+        int rewritten_map[kMaxVisibleRows] = {};
+        std::uint32_t out = 0;
+        for (int i = 0; i < quick_record_count && out < visible_count; ++i) {
+            rewritten_map[out++] = quick_records[i].record_index;
+        }
+
+        bool changed = false;
+        for (std::uint32_t row = 0; row < visible_count && out < visible_count; ++row) {
+            const int record_index = visible_map[row];
+            bool is_quick_record = false;
+            for (int i = 0; i < quick_record_count; ++i) {
+                if (quick_records[i].record_index == record_index) {
+                    is_quick_record = true;
+                    break;
+                }
+            }
+            if (is_quick_record) {
+                changed = true;
+                continue;
+            }
+            rewritten_map[out++] = record_index;
+        }
+        while (out < visible_count) {
+            rewritten_map[out++] = -1;
+        }
+
+        for (std::uint32_t row = 0; row < visible_count; ++row) {
+            if (visible_map[row] != rewritten_map[row]) {
+                changed = true;
+            }
+            visible_map[row] = rewritten_map[row];
+        }
+
+        if (changed) {
+            log::Write("[load-ui] reordered new visible index map root=%p quick_count=%d visible_count=%u first_record=%d\n",
+                reinterpret_cast<void*>(root),
+                quick_record_count,
+                visible_count,
+                rewritten_map[0]);
+        }
+        return changed;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        log::Write("[load-ui] rewrite new visible index map failed root=%p code=0x%08lX\n",
+            reinterpret_cast<void*>(root),
+            static_cast<unsigned long>(GetExceptionCode()));
+        return false;
+    }
+}
+
 std::int32_t* __fastcall InGameMenuLoadCoreHook(
     std::int64_t self,
     std::int32_t* out_result,
@@ -287,18 +419,24 @@ std::int32_t* __fastcall InGameMenuLoadCoreHook(
     return result;
 }
 
-std::int64_t __fastcall BuildVisibleMapHook(std::int64_t root) {
-    std::int64_t result = 0;
+void __fastcall BuildVisibleMapHook(
+    std::int64_t root,
+    std::int64_t component,
+    unsigned int row_index,
+    char event_type) {
     if (g_build_visible_map_original != nullptr) {
-        result = g_build_visible_map_original(root);
+        g_build_visible_map_original(root, component, row_index, event_type);
     }
-    g_last_ui_root.store(static_cast<std::uintptr_t>(root));
     const std::uintptr_t root_u = static_cast<std::uintptr_t>(root);
-    RewriteVisibleMapForReservedQuickSlot(root_u, kRootOffsetVisibleMap, kRootOffsetVisibleCount);
-    RewriteVisibleMapForReservedQuickSlot(root_u, kRootOffsetSecondaryVisibleMap, kRootOffsetSecondaryVisibleCount);
-    HideReservedQuickSlotFromSaveUi(root_u, kRootOffsetVisibleMap, kRootOffsetVisibleCount);
-    HideReservedQuickSlotFromSaveUi(root_u, kRootOffsetSecondaryVisibleMap, kRootOffsetSecondaryVisibleCount);
-    return result;
+    g_last_ui_root.store(root_u);
+    if (IsLikelyNewLoadUiRoot(root_u)) {
+        RewriteNewVisibleIndexMapForQuickSlots(root_u);
+    } else {
+        RewriteVisibleMapForReservedQuickSlot(root_u, kRootOffsetVisibleMap, kRootOffsetVisibleCount);
+        RewriteVisibleMapForReservedQuickSlot(root_u, kRootOffsetSecondaryVisibleMap, kRootOffsetSecondaryVisibleCount);
+        HideReservedQuickSlotFromSaveUi(root_u, kRootOffsetVisibleMap, kRootOffsetVisibleCount);
+        HideReservedQuickSlotFromSaveUi(root_u, kRootOffsetSecondaryVisibleMap, kRootOffsetSecondaryVisibleCount);
+    }
 }
 
 std::int64_t __fastcall LoadSelectedRefreshHook(std::int64_t root) {
@@ -306,8 +444,17 @@ std::int64_t __fastcall LoadSelectedRefreshHook(std::int64_t root) {
     return g_load_selected_refresh_original(root);
 }
 
-void __fastcall LoadModalHandlerHook(std::uint64_t* self, std::int64_t source, char accepted, unsigned int arg4) {
+void __fastcall LoadModalHandlerHook(
+    std::uint64_t* self,
+    std::int64_t source,
+    char event_type,
+    std::int64_t payload,
+    unsigned int row_index) {
     const std::uintptr_t root = reinterpret_cast<std::uintptr_t>(self);
+    if (IsLikelyNewLoadUiRoot(root)) {
+        g_last_ui_root.store(root);
+    }
+
     std::uintptr_t expected_source = 0;
     __try {
         expected_source = root != 0 ? *reinterpret_cast<const std::uintptr_t*>(root + kRootOffsetModalSource) : 0;
@@ -324,12 +471,12 @@ void __fastcall LoadModalHandlerHook(std::uint64_t* self, std::int64_t source, c
 
     if (is_quick_load_modal) {
         log::Write("[quick-load-confirm] resolved accepted=%d root=%p modal=%p source=%p arg4=%u\n",
-            accepted ? 1 : 0,
+            event_type ? 1 : 0,
             reinterpret_cast<void*>(root),
             reinterpret_cast<void*>(g_quick_load_confirm_modal.load()),
             reinterpret_cast<void*>(source),
-            arg4);
-        if (!accepted) {
+            row_index);
+        if (!event_type) {
             g_quick_load_confirm_modal_active.store(false);
             g_quick_load_confirm_root.store(0);
             g_quick_load_confirm_modal.store(0);
@@ -337,7 +484,7 @@ void __fastcall LoadModalHandlerHook(std::uint64_t* self, std::int64_t source, c
     }
 
     if (g_load_modal_handler_original != nullptr) {
-        g_load_modal_handler_original(self, source, accepted, arg4);
+        g_load_modal_handler_original(self, source, event_type, payload, row_index);
     }
 }
 
@@ -363,6 +510,137 @@ bool EnableHookRaw(const char* name, std::uintptr_t target) {
         return false;
     }
     return true;
+}
+
+bool TryOpenNewQuickLoadConfirmationModal(std::uintptr_t root, const char* source) {
+    if (g_load_selected_refresh_original == nullptr) {
+        log::Write("[quick-load-confirm] unavailable reason=no-selected-refresh source=%s\n",
+            source != nullptr ? source : "<null>");
+        return false;
+    }
+    if (!IsLikelyNewLoadUiRoot(root)) {
+        return false;
+    }
+    if (!IsNewLoadStyleMode(root)) {
+        log::Write("[quick-load-confirm] unavailable reason=new-root-not-load-mode root=%p source=%s\n",
+            reinterpret_cast<void*>(root),
+            source != nullptr ? source : "<null>");
+        return false;
+    }
+
+    __try {
+        const std::uintptr_t visible_list_widget =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetVisibleListWidget);
+        const std::uintptr_t catalog_list_widget =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetCatalogListWidget);
+        const std::uintptr_t index_map =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetVisibleIndexMap);
+        const std::uint32_t index_count =
+            *reinterpret_cast<const std::uint32_t*>(root + kNewRootOffsetVisibleIndexCount);
+        const std::uintptr_t records =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetVisibleRecords);
+        const std::uint32_t record_count =
+            *reinterpret_cast<const std::uint32_t*>(root + kNewRootOffsetVisibleRecordCount);
+        if (visible_list_widget == 0
+            || ((records == 0 || record_count == 0) && (index_map == 0 || index_count == 0))
+            || record_count > kMaxVisibleRows
+            || index_count > kMaxVisibleRows) {
+            log::Write("[quick-load-confirm] unavailable reason=new-no-visible-records root=%p count=%u source=%s\n",
+                reinterpret_cast<void*>(root),
+                record_count,
+                source != nullptr ? source : "<null>");
+            return false;
+        }
+
+        const int selected_slot = quick_slots::SelectLoadSlot();
+        std::uint32_t quick_row = 0xFFFFFFFFu;
+        bool quick_row_uses_record_array = true;
+        for (std::uint32_t row = 0; row < record_count; ++row) {
+            const auto* record = reinterpret_cast<const std::uint8_t*>(
+                records + (static_cast<std::uintptr_t>(row) * kNewVisibleRecordSize));
+            const int slot = *reinterpret_cast<const int*>(record);
+            if (slot == selected_slot) {
+                quick_row = row;
+                break;
+            }
+        }
+        const int selected_record_index = quick_slots::FindRecordIndexBySlot(selected_slot);
+        if (quick_row == 0xFFFFFFFFu && selected_record_index >= 0 && index_map != 0 && index_count != 0) {
+            for (std::uint32_t row = 0; row < index_count; ++row) {
+                const int record_index = *reinterpret_cast<const int*>(
+                    index_map + (static_cast<std::uintptr_t>(row) * sizeof(int)));
+                if (record_index == selected_record_index) {
+                    quick_row = row;
+                    quick_row_uses_record_array = false;
+                    break;
+                }
+            }
+        }
+        if (quick_row == 0xFFFFFFFFu) {
+            log::Write("[quick-load-confirm] unavailable reason=new-quick-row-not-visible root=%p slot=%d record_count=%u index_count=%u source=%s\n",
+                reinterpret_cast<void*>(root),
+                selected_slot,
+                record_count,
+                index_count,
+                source != nullptr ? source : "<null>");
+            return false;
+        }
+
+        const std::uint32_t previous_visible_row =
+            *reinterpret_cast<const std::uint32_t*>(visible_list_widget + kNewListWidgetSelectedRowOffset);
+        std::uint32_t previous_catalog_row = 0xFFFFFFFFu;
+        if (catalog_list_widget != 0) {
+            previous_catalog_row =
+                *reinterpret_cast<const std::uint32_t*>(catalog_list_widget + kNewListWidgetSelectedRowOffset);
+        }
+
+        const std::uintptr_t previous_modal =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetActiveLoadModal);
+        if (quick_row_uses_record_array) {
+            *reinterpret_cast<std::uint32_t*>(visible_list_widget + kNewListWidgetSelectedRowOffset) = quick_row;
+            if (catalog_list_widget != 0) {
+                *reinterpret_cast<std::uint32_t*>(catalog_list_widget + kNewListWidgetSelectedRowOffset) = 0xFFFFFFFFu;
+            }
+        } else {
+            *reinterpret_cast<std::uint32_t*>(visible_list_widget + kNewListWidgetSelectedRowOffset) = 0xFFFFFFFFu;
+            if (catalog_list_widget != 0) {
+                *reinterpret_cast<std::uint32_t*>(catalog_list_widget + kNewListWidgetSelectedRowOffset) = quick_row;
+            }
+        }
+
+        const std::int64_t refresh_result = g_load_selected_refresh_original(static_cast<std::int64_t>(root));
+        const std::uintptr_t new_modal =
+            *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetActiveLoadModal);
+
+        *reinterpret_cast<std::uint32_t*>(visible_list_widget + kNewListWidgetSelectedRowOffset) = previous_visible_row;
+        if (catalog_list_widget != 0) {
+            *reinterpret_cast<std::uint32_t*>(catalog_list_widget + kNewListWidgetSelectedRowOffset) = previous_catalog_row;
+        }
+
+        const bool opened = new_modal != 0 && new_modal != previous_modal;
+        if (opened) {
+            g_quick_load_confirm_modal_active.store(true);
+            g_quick_load_confirm_root.store(root);
+            g_quick_load_confirm_modal.store(new_modal);
+        }
+        log::Write("[quick-load-confirm] source=%s path=new-load-ui root=%p slot=%d row=%u row_source=%s refresh_result=%p previous_modal=%p new_modal=%p opened=%d\n",
+            source != nullptr ? source : "<null>",
+            reinterpret_cast<void*>(root),
+            selected_slot,
+            quick_row,
+            quick_row_uses_record_array ? "records" : "index-map",
+            reinterpret_cast<void*>(refresh_result),
+            reinterpret_cast<void*>(previous_modal),
+            reinterpret_cast<void*>(new_modal),
+            opened ? 1 : 0);
+        return opened;
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        log::Write("[quick-load-confirm] unavailable reason=new-exception code=0x%08lX root=%p source=%s\n",
+            static_cast<unsigned long>(GetExceptionCode()),
+            reinterpret_cast<void*>(root),
+            source != nullptr ? source : "<null>");
+        return false;
+    }
 }
 
 }  // namespace
@@ -487,6 +765,10 @@ bool TryOpenQuickLoadConfirmationModal(const char* source) {
     }
 
     const std::uintptr_t root = g_last_ui_root.load();
+    if (IsLikelyNewLoadUiRoot(root)) {
+        return TryOpenNewQuickLoadConfirmationModal(root, source);
+    }
+
     if (!IsLikelyLoadUiRoot(root)) {
         log::Write("[quick-load-confirm] unavailable reason=no-valid-cached-root root=%p source=%s\n",
             reinterpret_cast<void*>(root),

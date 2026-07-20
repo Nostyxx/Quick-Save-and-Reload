@@ -113,8 +113,8 @@ bool Prepare(const config::Settings& settings) {
         resolver::TryResolveGameStateGlobalFromBuildVisibleMap()
     });
 
-    if (load_core_ready && load_ui_ready) {
-        g_load_runtime_installed = load_runtime::Install({true});
+    if (load_core_ready) {
+        g_load_runtime_installed = load_runtime::Install({load_ui_ready});
         if (g_load_runtime_installed && load_ui_row_ready) {
             g_load_ui_runtime_installed = load_ui_runtime::Install({});
         }
@@ -124,11 +124,15 @@ bool Prepare(const config::Settings& settings) {
         health::Set(health::FeatureId::CoreLoad, health::State::Candidate,
             load_modal_ready
                 ? "native load context and confirmation-modal accept/cancel tracking active"
-                : "native load context and confirmation-modal opener active");
+                : load_ui_ready
+                    ? "native load context and confirmation-modal opener active"
+                    : "native load context active; confirmation UI unavailable");
         health::Set(health::FeatureId::LoadUi, health::State::Candidate,
             build_visible_map_ready && g_load_ui_runtime_installed
                 ? "quick-save load rows, reserved-slot hiding, and modal path active"
-                : "load modal path active; row customization unavailable");
+                : load_ui_ready
+                    ? "load modal path active; row customization unavailable"
+                    : "load UI targets changed; using direct load fallback");
     } else {
         health::Set(health::FeatureId::CoreLoad, health::State::Disabled,
             "validated load targets were unavailable or hook installation failed");

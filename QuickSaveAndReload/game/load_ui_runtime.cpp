@@ -16,13 +16,11 @@ using RenderSlotRowFn = std::int64_t(__fastcall*)(
     unsigned int*,
     char,
     char,
-    char,
-    std::uint64_t*,
-    std::uint64_t*);
+    char);
 using SetControlTextFn = std::int64_t(__fastcall*)(std::uint64_t, const char*);
 
-constexpr std::ptrdiff_t kRowOffsetTypeText = 0x360;
-constexpr std::ptrdiff_t kRowOffsetIndexName = 0x368;
+constexpr std::ptrdiff_t kRowOffsetTypeText = 0x368;
+constexpr std::ptrdiff_t kRowOffsetIndexName = 0x370;
 
 RenderSlotRowFn g_render_slot_row_original = nullptr;
 SetControlTextFn g_set_control_text = nullptr;
@@ -63,17 +61,15 @@ std::int64_t __fastcall RenderSlotRowHook(
     unsigned int* record,
     char flag,
     char flag2,
-    char flag3,
-    std::uint64_t* extra_control_a,
-    std::uint64_t* extra_control_b) {
+    char flag3) {
     if (g_render_slot_row_original == nullptr || !IsQuickRecord(record)) {
         return g_render_slot_row_original != nullptr
-            ? g_render_slot_row_original(row_script, record, flag, flag2, flag3, extra_control_a, extra_control_b)
+            ? g_render_slot_row_original(row_script, record, flag, flag2, flag3)
             : 0;
     }
 
     const std::int64_t result =
-        g_render_slot_row_original(row_script, record, flag, flag2, flag3, extra_control_a, extra_control_b);
+        g_render_slot_row_original(row_script, record, flag, flag2, flag3);
     const std::uint64_t row_script_u64 = reinterpret_cast<std::uint64_t>(row_script);
     SetRowControlText(row_script_u64, kRowOffsetTypeText, text::Get(text::TextId::UiRowLabel));
     SetRowControlText(row_script_u64, kRowOffsetIndexName, "");

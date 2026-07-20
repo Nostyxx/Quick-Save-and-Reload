@@ -308,7 +308,7 @@ std::uintptr_t TryResolveGameStateGlobalFromBuildVisibleMap() {
         return 0;
     }
 
-    constexpr std::size_t kSearchSize = 0x80;
+    constexpr std::size_t kSearchSize = 0x430;
     constexpr std::size_t kRipInstructionSize = 7;
     const auto* bytes = reinterpret_cast<const std::uint8_t*>(build_visible_map);
     __try {
@@ -316,10 +316,23 @@ std::uintptr_t TryResolveGameStateGlobalFromBuildVisibleMap() {
             if (bytes[offset] != 0x48 || bytes[offset + 1] != 0x8B || bytes[offset + 2] != 0x05) {
                 continue;
             }
+            if (offset + 14 > kSearchSize
+                || bytes[offset + 7] != 0x48
+                || bytes[offset + 8] != 0x8B
+                || bytes[offset + 9] != 0x88
+                || bytes[offset + 10] != 0xB0
+                || bytes[offset + 11] != 0x00
+                || bytes[offset + 12] != 0x00
+                || bytes[offset + 13] != 0x00) {
+                continue;
+            }
 
             std::int32_t displacement = 0;
             std::memcpy(&displacement, bytes + offset + 3, sizeof(displacement));
             const std::uintptr_t global_address = build_visible_map + offset + kRipInstructionSize + displacement;
+            log::Write("[resolver] GameStateGlobal    status=Candidate address=%p source=BuildVisibleMap+0x%zX\n",
+                reinterpret_cast<void*>(global_address),
+                offset);
             return global_address;
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {

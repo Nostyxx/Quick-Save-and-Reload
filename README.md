@@ -2,7 +2,7 @@
 
 Quick save and quick load mod for Crimson Desert.
 
-Version: 1.6
+Version: 1.7
 
 ## Install
 

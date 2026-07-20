@@ -3,6 +3,7 @@
 #include <MinHook.h>
 
 #include "include/log.h"
+#include "include/quick_slot_runtime.h"
 #include "include/resolver.h"
 #include "include/save_runtime.h"
 #include "include/text_runtime.h"
@@ -113,6 +114,7 @@ bool InvokeQuickSave(std::uintptr_t actor, int slot, const char* source) {
         succeeded ? 1 : 0,
         static_cast<unsigned long>(GetCurrentThreadId()));
     if (succeeded) {
+        quick_slots::MarkQuickSaveSucceeded(slot);
         toast::Show(text::TextId::ToastQuickSaveSuccess);
     } else {
         toast::ShowFormatted(text::TextId::ToastQuickSaveFailedCode, static_cast<unsigned int>(scratch.out_result));

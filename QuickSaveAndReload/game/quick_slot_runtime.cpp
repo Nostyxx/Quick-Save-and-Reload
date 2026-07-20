@@ -11,6 +11,8 @@ constexpr std::size_t kSaveRecordSize = 0x58;
 int g_first_slot = 108;
 int g_slot_count = 1;
 std::uintptr_t g_game_state_global = 0;
+std::array<std::uint64_t, kMaxQuickSlotCount> g_fallback_order{};
+std::uint64_t g_next_fallback_order = 1;
 
 int ClampSlotCount(int value) {
     if (value < 1) {
@@ -66,12 +68,25 @@ bool TryGetRecordByIndex(int index, RecordInfo& info) {
     }
 }
 
+int SlotToFallbackIndex(int slot) {
+    if (!IsQuickSlot(slot)) {
+        return -1;
+    }
+    return g_first_slot - slot;
+}
+
+bool HasSaveCatalog() {
+    return GetSaveCatalog() != 0;
+}
+
 }  // namespace
 
 void Initialize(const Options& options) {
     g_first_slot = options.first_slot > 0 ? options.first_slot : 108;
     g_slot_count = ClampSlotCount(options.slot_count);
     g_game_state_global = options.game_state_global;
+    g_fallback_order.fill(0);
+    g_next_fallback_order = 1;
     log::Write("[quick-slots] configured first_slot=%d count=%d last_slot=%d game_state_global=%p\n",
         g_first_slot,
         g_slot_count,
@@ -155,6 +170,28 @@ int CollectExistingQuickSlotsNewestFirst(RecordInfo* out_records, int capacity) 
 
 int SelectSaveSlot() {
     const auto slots = Slots();
+    if (!HasSaveCatalog()) {
+        int oldest_slot = g_first_slot;
+        std::uint64_t oldest_order = UINT64_MAX;
+        for (int i = 0; i < g_slot_count; ++i) {
+            const int slot = slots[static_cast<std::size_t>(i)];
+            const std::uint64_t order = g_fallback_order[static_cast<std::size_t>(i)];
+            if (order == 0) {
+                log::Write("[quick-slots] selected save slot=%d reason=fallback-empty\n", slot);
+                return slot;
+            }
+            if (order < oldest_order) {
+                oldest_order = order;
+                oldest_slot = slot;
+            }
+        }
+
+        log::Write("[quick-slots] selected save slot=%d reason=fallback-oldest order=0x%llX\n",
+            oldest_slot,
+            static_cast<unsigned long long>(oldest_order));
+        return oldest_slot;
+    }
+
     RecordInfo oldest{};
     bool have_oldest = false;
     for (int i = 0; i < g_slot_count; ++i) {
@@ -200,6 +237,22 @@ int SelectLoadSlot() {
     }
 
     if (!have_newest) {
+        int newest_slot = g_first_slot;
+        std::uint64_t newest_order = 0;
+        for (int i = 0; i < g_slot_count; ++i) {
+            const std::uint64_t order = g_fallback_order[static_cast<std::size_t>(i)];
+            if (order > newest_order) {
+                newest_order = order;
+                newest_slot = slots[static_cast<std::size_t>(i)];
+            }
+        }
+        if (newest_order != 0) {
+            log::Write("[quick-slots] selected load slot=%d reason=fallback-newest order=0x%llX\n",
+                newest_slot,
+                static_cast<unsigned long long>(newest_order));
+            return newest_slot;
+        }
+
         log::Write("[quick-slots] selected load slot=%d reason=no-existing-quick-save\n", g_first_slot);
         return g_first_slot;
     }
@@ -209,6 +262,21 @@ int SelectLoadSlot() {
         newest.record_index,
         static_cast<unsigned long long>(newest.order_key));
     return newest.slot;
+}
+
+void MarkQuickSaveSucceeded(int slot) {
+    const int index = SlotToFallbackIndex(slot);
+    if (index < 0 || index >= g_slot_count) {
+        return;
+    }
+
+    g_fallback_order[static_cast<std::size_t>(index)] = g_next_fallback_order++;
+    if (g_next_fallback_order == 0) {
+        g_next_fallback_order = 1;
+    }
+    log::Write("[quick-slots] marked saved slot=%d fallback_order=0x%llX\n",
+        slot,
+        static_cast<unsigned long long>(g_fallback_order[static_cast<std::size_t>(index)]));
 }
 
 }  // namespace qsr::quick_slots

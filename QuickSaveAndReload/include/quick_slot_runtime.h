@@ -27,6 +27,7 @@ std::array<int, kMaxQuickSlotCount> Slots();
 bool IsQuickSlot(int slot);
 int SelectSaveSlot();
 int SelectLoadSlot();
+void MarkQuickSaveSucceeded(int slot);
 int FindRecordIndexBySlot(int slot);
 bool TryGetRecordBySlot(int slot, RecordInfo& info);
 int CollectExistingQuickSlotsNewestFirst(RecordInfo* out_records, int capacity);

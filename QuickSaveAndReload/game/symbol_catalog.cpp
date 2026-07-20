@@ -29,46 +29,44 @@ constexpr const char* kServiceCommandBuildRelaxed =
 
 constexpr const char* kInGameMenuLoadCoreStrict =
     "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
-    "40 38 B1 CA 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9 02 76 ?? 41 8D 41 9C 83 F8 08";
+    "40 38 B1 C2 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9 02 76 ?? 41 8D 41 9C 83 F8 08";
 constexpr const char* kInGameMenuLoadCoreRelaxed =
     "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
-    "40 38 B1 CA 0C 00 00";
+    "40 38 B1 C2 0C 00 00";
 
 constexpr const char* kBuildVisibleMapStrict =
-    "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC 88 00 00 00 "
-    "48 8B D9 45 33 F6 44 89 B1 E0 01 00 00 48 8D B9 D8 01 00 00 48 89 7D B7 41 8D 56 0F";
+    "48 85 D2 0F 84 ?? ?? ?? ?? 48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 "
+    "48 8D 6C 24 D0 48 81 EC 30 01 00 00 45 0F B6 F9 41 8B F0 4C 8B F1";
 constexpr const char* kBuildVisibleMapRelaxed =
-    "48 89 4C 24 08 55 53 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 E1 48 81 EC 88 00 00 00 "
-    "48 8B D9 45 33 F6 44 89 B1 E0 01 00 00 48 8D B9 D8 01 00 00";
+    "48 85 D2 0F 84 ?? ?? ?? ?? 48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 "
+    "48 8D 6C 24 D0 48 81 EC 30 01 00 00";
 
 constexpr const char* kLoadSelectedRefreshStrict =
-    "40 53 55 56 57 41 56 41 57 48 81 EC 68 0C 00 00 48 8B D9 48 8B 81 58 01 00 00 "
-    "8B B8 18 01 00 00 83 FF FF 74 ?? 8B CF EB ?? 48 8B 81 50 01 00 00 8B 88 18 01 00 00 "
-    "B8 E8 01 00 00 BA D8 01 00 00 0F 44 C2";
+    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 E7 FF FF B8 50 19 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 48 8B D9 45 33 C9 44 89 4C 24 30 48 8B 81 60 01 00 00 "
+    "44 8B B0 20 01 00 00";
 constexpr const char* kLoadSelectedRefreshRelaxed =
-    "40 53 55 56 57 41 56 41 57 48 81 EC 68 0C 00 00 48 8B D9 48 8B 81 58 01 00 00 "
-    "8B B8 18 01 00 00 83 FF FF";
+    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 E7 FF FF B8 50 19 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 48 8B D9";
 
 constexpr const char* kLoadModalHandlerStrict =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 30 FF FF FF "
-    "48 81 EC D0 01 00 00 4D 8B E1 48 8B F1 45 33 ED 48 8B 99 B0 01 00 00 "
-    "48 3B DA 0F 85 ?? ?? ?? ?? 45 84 C0 0F 85 ?? ?? ?? ??";
+    "40 53 48 83 EC 20 4D 89 CA 48 89 CB 48 39 91 58 01 00 00 74 ?? "
+    "48 39 91 60 01 00 00 0F 85 ?? ?? ?? ?? 48 39 91 60 01 00 00 0F 94 D0";
 constexpr const char* kLoadModalHandlerRelaxed =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 30 FF FF FF "
-    "48 81 EC D0 01 00 00 4D 8B E1 48 8B F1 45 33 ED 48 8B 99 B0 01 00 00";
+    "40 53 48 83 EC 20 4D 89 CA 48 89 CB 48 39 91 58 01 00 00";
 
 constexpr const char* kRenderSlotRowStrict =
-    "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 C0 EE FF FF B8 40 12 00 00 "
+    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00 "
     "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F1 45 0F B6 F8 48 8B FA 48 8B D9";
 constexpr const char* kRenderSlotRowRelaxed =
-    "48 89 5C 24 10 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 C0 EE FF FF B8 40 12 00 00";
+    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00";
 
 constexpr const char* kSetControlTextStrict =
-    "40 55 53 56 57 41 56 48 8D AC 24 70 F0 FF FF B8 90 10 00 00 E8 ?? ?? ?? ?? "
-    "48 2B E0 48 8B F1 48 8B 81 A8 00 00 00 48 85 C0 74 ?? 48 8B 48 08 48 85 C9";
+    "48 89 5C 24 10 48 89 74 24 18 55 57 41 56 48 8D AC 24 80 F0 FF FF B8 80 10 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 48 8B F1 48 8B 81 A8 00 00 00 48 85 C0 74 ?? 48 8B 48 08 48 85 C9";
 constexpr const char* kSetControlTextRelaxed =
-    "40 55 53 56 57 41 56 48 8D AC 24 70 F0 FF FF B8 90 10 00 00 E8 ?? ?? ?? ?? "
-    "48 2B E0 48 8B F1";
+    "48 89 5C 24 10 48 89 74 24 18 55 57 41 56 48 8D AC 24 80 F0 FF FF B8 80 10 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 48 8B F1";
 
 constexpr std::array<Definition, static_cast<std::size_t>(SymbolId::Count)> kCatalog{{
     {SymbolId::DirectLocalSave, "DirectLocalSave", health::FeatureId::CoreSave, true, 0, {kDirectLocalSaveStrict, kDirectLocalSaveRelaxed}},

@@ -97,7 +97,11 @@ LRESULT CALLBACK HookedGameWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lp
             return 0;
         }
 
-        log::Write("[quick-load] unavailable reason=confirmation-open-failed direct-fallback-blocked\n");
+        if (load_runtime::InvokeQuickLoadFromCachedContext("wndproc-direct-fallback")) {
+            return 0;
+        }
+
+        log::Write("[quick-load] unavailable reason=confirmation-open-failed direct-fallback-failed\n");
         toast::Show(text::TextId::ToastQuickLoadFailed);
         return 0;
     }
