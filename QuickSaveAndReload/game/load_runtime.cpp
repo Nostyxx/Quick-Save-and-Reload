@@ -29,12 +29,11 @@ constexpr std::uint32_t kMaxVisibleRows = 64;
 
 constexpr std::ptrdiff_t kNewRootOffsetCatalogListWidget = 0x158;
 constexpr std::ptrdiff_t kNewRootOffsetVisibleListWidget = 0x160;
-constexpr std::ptrdiff_t kNewRootOffsetActiveLoadModal = 0x1E0;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexMap = 0x1F0;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexCount = 0x1F8;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleRecords = 0x200;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleRecordCount = 0x208;
-constexpr std::ptrdiff_t kNewRootOffsetMode = 0x220;
+constexpr std::ptrdiff_t kNewRootOffsetActiveLoadModal = 0x1E8;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexMap = 0x1F8;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexCount = 0x200;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleRecords = 0x208;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleRecordCount = 0x210;
 constexpr std::ptrdiff_t kNewListWidgetSelectedRowOffset = 0x120;
 constexpr std::uint32_t kNewVisibleRecordSize = 0x50;
 
@@ -89,13 +88,11 @@ bool IsLikelyNewLoadUiRoot(std::uintptr_t root) {
         const std::uintptr_t visible_list =
             *reinterpret_cast<const std::uintptr_t*>(root + kNewRootOffsetVisibleListWidget);
         const std::uint32_t visible_count =
-            *reinterpret_cast<const std::uint32_t*>(root + kNewRootOffsetVisibleRecordCount);
-        const std::uint8_t mode = *reinterpret_cast<const std::uint8_t*>(root + kNewRootOffsetMode);
+            *reinterpret_cast<const std::uint32_t*>(root + kNewRootOffsetVisibleIndexCount);
         return vtable != 0
             && catalog_list != 0
             && visible_list != 0
-            && visible_count <= kMaxVisibleRows
-            && mode <= 2;
+            && visible_count <= kMaxVisibleRows;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -114,16 +111,7 @@ bool IsLoadStyleMode(std::uintptr_t root) {
 }
 
 bool IsNewLoadStyleMode(std::uintptr_t root) {
-    if (root == 0) {
-        return false;
-    }
-
-    __try {
-        const std::uint8_t mode = *reinterpret_cast<const std::uint8_t*>(root + kNewRootOffsetMode);
-        return mode == 1 || mode == 2;
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-        return false;
-    }
+    return IsLikelyNewLoadUiRoot(root);
 }
 
 bool TryGetVisibleMap(

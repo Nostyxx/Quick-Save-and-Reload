@@ -436,6 +436,8 @@ DWORD WINAPI WorkerThread(void*) {
             bool expected = false;
             if (g_pending_quick_save.compare_exchange_strong(expected, true)) {
                 log::Write("[hotkey] quick-save requested\n");
+            } else {
+                log::Write("[hotkey] quick-save ignored reason=pending\n");
             }
         }
         previous_save_down = save_down;
@@ -459,6 +461,10 @@ DWORD WINAPI WorkerThread(void*) {
             bool expected = false;
             if (g_pending_quick_save.compare_exchange_strong(expected, true)) {
                 log::Write("[hotkey] quick-save requested source=controller buttons=0x%04X mask=0x%04X\n",
+                    static_cast<unsigned>(controller_buttons),
+                    static_cast<unsigned>(g_quick_save_controller_mask));
+            } else {
+                log::Write("[hotkey] quick-save ignored source=controller reason=pending buttons=0x%04X mask=0x%04X\n",
                     static_cast<unsigned>(controller_buttons),
                     static_cast<unsigned>(g_quick_save_controller_mask));
             }
@@ -514,6 +520,10 @@ bool Start(int quick_save_vk, int quick_load_vk, WORD quick_save_controller_mask
         return false;
     }
     return true;
+}
+
+bool HasQuickSaveRequest() {
+    return g_pending_quick_save.load();
 }
 
 bool TakeQuickSaveRequest() {

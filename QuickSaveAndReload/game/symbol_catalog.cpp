@@ -13,6 +13,25 @@ constexpr const char* kDirectLocalSaveRelaxed =
     "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 44 89 44 24 18 55 41 54 41 55 41 56 41 57 "
     "48 89 E5 48 83 EC 60 4D 89 CC 45 89 C5 49 89 D6 49 89 CF";
 
+constexpr const char* kPreparedLocalSaveStrict =
+    "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 20 55 41 54 41 55 41 56 41 57 "
+    "48 89 E5 48 83 EC 60 4D 89 CC 4D 89 C5 49 89 D7 49 89 CE 41 8B 08 8D 41 9C 83 F8 08";
+constexpr const char* kPreparedLocalSaveRelaxed =
+    "41 8B 08 8D 41 9C 83 F8 08 0F 86 ?? ?? ?? ?? 8D 41 FD 85 C0 74 ?? "
+    "C6 45 40 01 C6 45 D0 00 49 8B 06 4C 89 F1 FF 90 F0 00 00 00";
+
+constexpr const char* kUiSaveRequestStrict =
+    "48 89 5C 24 10 48 89 6C 24 18 56 57 41 54 41 56 41 57 48 83 EC 20 "
+    "45 89 CF 4D 89 C6 48 89 D7 48 89 CD 48 8B 71 08 48 8B 86 A0 00 00 00 48 8B 40 68";
+constexpr const char* kUiSaveRequestRelaxed =
+    "45 89 CF 4D 89 C6 48 89 D7 48 89 CD 48 8B 71 08 48 8B 86 A0 00 00 00 48 8B 40 68";
+
+constexpr const char* kSaveServiceTickStrict =
+    "48 89 5C 24 10 44 89 4C 24 20 4C 89 44 24 18 55 56 57 41 54 41 55 41 56 41 57 "
+    "48 8D 6C 24 D9 48 81 EC C0 00 00 00 4C 8B FA 4C 8B 71 08";
+constexpr const char* kSaveServiceTickRelaxed =
+    "48 8D 6C 24 D9 48 81 EC C0 00 00 00 4C 8B FA 4C 8B 71 08 49 8B 7E 78 45 8B A6 80 00 00 00";
+
 constexpr const char* kSaveServiceDriverStrict =
     "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2 "
     "48 8D 3D ?? ?? ?? ?? 74 ?? 48 8B 7A 70";
@@ -20,12 +39,10 @@ constexpr const char* kSaveServiceDriverRelaxed =
     "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2";
 
 constexpr const char* kServiceCommandBuildStrict =
-    "48 89 5C 24 10 4C 89 4C 24 20 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 "
-    "48 8D 6C 24 D9 48 81 EC C0 00 00 00 49 8B F1 4D 8B E8 4C 8B F2 4C 8B E1 "
-    "48 8B 05 ?? ?? ?? ?? 4C 8B 38";
+    "0F B7 45 F3 66 41 89 46 03 BE BB 08 00 00 66 41 89 36 41 C6 46 02 FF "
+    "44 8D 78 05 41 83 FC 01";
 constexpr const char* kServiceCommandBuildRelaxed =
-    "48 89 5C 24 10 4C 89 4C 24 20 48 89 4C 24 08 55 56 57 41 54 41 55 41 56 41 57 "
-    "48 8D 6C 24 D9 48 81 EC C0 00 00 00 49 8B F1 4D 8B E8 4C 8B F2 4C 8B E1";
+    "0F B7 45 F3 66 41 89 46 03 BE BB 08 00 00 66 41 89 36 41 C6 46 02 FF";
 
 constexpr const char* kInGameMenuLoadCoreStrict =
     "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
@@ -70,8 +87,11 @@ constexpr const char* kSetControlTextRelaxed =
 
 constexpr std::array<Definition, static_cast<std::size_t>(SymbolId::Count)> kCatalog{{
     {SymbolId::DirectLocalSave, "DirectLocalSave", health::FeatureId::CoreSave, true, 0, {kDirectLocalSaveStrict, kDirectLocalSaveRelaxed}},
+    {SymbolId::PreparedLocalSave, "PreparedLocalSave", health::FeatureId::CoreSave, false, 0, {kPreparedLocalSaveStrict, kPreparedLocalSaveRelaxed}},
+    {SymbolId::UiSaveRequest, "UiSaveRequest", health::FeatureId::CoreSave, false, 0, {kUiSaveRequestStrict, kUiSaveRequestRelaxed}},
+    {SymbolId::SaveServiceTick, "SaveServiceTick", health::FeatureId::CoreSave, false, 0, {kSaveServiceTickStrict, kSaveServiceTickRelaxed}},
     {SymbolId::SaveServiceDriver, "SaveServiceDriver", health::FeatureId::CoreSave, true, -0x20, {kSaveServiceDriverStrict, kSaveServiceDriverRelaxed}},
-    {SymbolId::ServiceCommandBuild, "ServiceCommandBuild", health::FeatureId::CoreSave, false, 0, {kServiceCommandBuildStrict, kServiceCommandBuildRelaxed}},
+    {SymbolId::ServiceCommandBuild, "ServiceCommandBuild", health::FeatureId::CoreSave, false, -0x2B2, {kServiceCommandBuildStrict, kServiceCommandBuildRelaxed}},
     {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", health::FeatureId::CoreLoad, true, 0, {kInGameMenuLoadCoreStrict, kInGameMenuLoadCoreRelaxed}},
     {SymbolId::BuildVisibleMap, "BuildVisibleMap", health::FeatureId::LoadUi, false, 0, {kBuildVisibleMapStrict, kBuildVisibleMapRelaxed}},
     {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", health::FeatureId::LoadUi, false, 0, {kLoadSelectedRefreshStrict, kLoadSelectedRefreshRelaxed}},

@@ -71,16 +71,18 @@ bool Prepare(const config::Settings& settings) {
     health::Set(health::FeatureId::Input, health::State::Disabled,
         "excluded until release action paths are installed");
 
-    log::Write("[hooks] mode=service-command-build-f5-dispatch vk=%d\n",
+    log::Write("[hooks] mode=save-worker-idle-f5-dispatch vk=%d\n",
         settings.quick_save_vk);
 
     if (!resolver::ValidateDirectLocalSaveRuntime()
-        || !resolver::ValidateSaveServiceRuntime()
-        || !resolver::ValidateServiceCommandBuildRuntime()) {
+        || !resolver::ValidateSaveServiceRuntime()) {
         health::Set(health::FeatureId::CoreSave, health::State::Disabled,
             "quick-save dispatcher blocked because validated save targets were unavailable");
         return false;
     }
+    resolver::ValidatePreparedLocalSaveRuntime();
+    resolver::ValidateUiSaveRequestRuntime();
+    resolver::ValidateSaveServiceTickRuntime();
 
     const MH_STATUS init_status = MH_Initialize();
     if (init_status != MH_OK && init_status != MH_ERROR_ALREADY_INITIALIZED) {
@@ -151,7 +153,7 @@ bool Prepare(const config::Settings& settings) {
     }
 
     health::Set(health::FeatureId::CoreSave, health::State::Candidate,
-        "F5 native save dispatch active on service-command-build boundary");
+        "F5 native save dispatch active on save-worker idle boundary");
     health::Set(health::FeatureId::Input, health::State::Candidate,
         "keyboard/controller quick-save and quick-load requests active");
     return true;

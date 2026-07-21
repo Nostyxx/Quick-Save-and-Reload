@@ -9,6 +9,9 @@ namespace qsr::symbols {
 
 enum class SymbolId {
     DirectLocalSave = 0,
+    PreparedLocalSave,
+    UiSaveRequest,
+    SaveServiceTick,
     SaveServiceDriver,
     ServiceCommandBuild,
     InGameMenuLoadCore,
