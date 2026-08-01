@@ -31,7 +31,6 @@ bool ValidatePreparedLocalSaveRuntime();
 bool ValidateUiSaveRequestRuntime();
 bool ValidateSaveServiceTickRuntime();
 bool ValidateSaveServiceRuntime();
-bool ValidateServiceCommandBuildRuntime();
 bool ValidateInGameMenuLoadCoreRuntime();
 bool ValidateBuildVisibleMapRuntime();
 bool ValidateLoadSelectedRefreshRuntime();

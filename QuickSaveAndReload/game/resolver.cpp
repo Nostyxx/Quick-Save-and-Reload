@@ -409,18 +409,6 @@ bool ValidateSaveServiceRuntime() {
     return true;
 }
 
-bool ValidateServiceCommandBuildRuntime() {
-    Result& result = g_results[static_cast<std::size_t>(symbols::SymbolId::ServiceCommandBuild)];
-    if (result.status != Status::Candidate || result.matched_pattern != 1 || result.address == 0) {
-        log::Write("[resolver] ServiceCommandBuild status=%s validation=blocked reason=strict-current-signature-required\n",
-            StatusName(result.status));
-        return false;
-    }
-
-    result.status = Status::Validated;
-    return true;
-}
-
 bool ValidateInGameMenuLoadCoreRuntime() {
     Result& result = g_results[static_cast<std::size_t>(symbols::SymbolId::InGameMenuLoadCore)];
     if (result.status != Status::Candidate || result.matched_pattern != 1 || result.address == 0) {

@@ -13,7 +13,6 @@ enum class SymbolId {
     UiSaveRequest,
     SaveServiceTick,
     SaveServiceDriver,
-    ServiceCommandBuild,
     InGameMenuLoadCore,
     BuildVisibleMap,
     LoadSelectedRefresh,

@@ -33,16 +33,10 @@ constexpr const char* kSaveServiceTickRelaxed =
     "48 8D 6C 24 D9 48 81 EC C0 00 00 00 4C 8B FA 4C 8B 71 08 49 8B 7E 78 45 8B A6 80 00 00 00";
 
 constexpr const char* kSaveServiceDriverStrict =
-    "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2 "
+    "FF 90 D0 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2 "
     "48 8D 3D ?? ?? ?? ?? 74 ?? 48 8B 7A 70";
 constexpr const char* kSaveServiceDriverRelaxed =
-    "FF 90 D8 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2";
-
-constexpr const char* kServiceCommandBuildStrict =
-    "0F B7 45 F3 66 41 89 46 03 BE BB 08 00 00 66 41 89 36 41 C6 46 02 FF "
-    "44 8D 78 05 41 83 FC 01";
-constexpr const char* kServiceCommandBuildRelaxed =
-    "0F B7 45 F3 66 41 89 46 03 BE BB 08 00 00 66 41 89 36 41 C6 46 02 FF";
+    "FF 90 D0 00 00 00 48 89 C6 48 8B 4B 68 48 8B 51 20 48 85 D2";
 
 constexpr const char* kInGameMenuLoadCoreStrict =
     "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
@@ -59,11 +53,11 @@ constexpr const char* kBuildVisibleMapRelaxed =
     "48 8D 6C 24 D0 48 81 EC 30 01 00 00";
 
 constexpr const char* kLoadSelectedRefreshStrict =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 E7 FF FF B8 50 19 00 00 "
+    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 E7 FF FF B8 50 19 00 00 "
     "E8 ?? ?? ?? ?? 48 2B E0 48 8B D9 45 33 C9 44 89 4C 24 30 48 8B 81 60 01 00 00 "
     "44 8B B0 20 01 00 00";
 constexpr const char* kLoadSelectedRefreshRelaxed =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 E7 FF FF B8 50 19 00 00 "
+    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 E7 FF FF B8 50 19 00 00 "
     "E8 ?? ?? ?? ?? 48 2B E0 48 8B D9";
 
 constexpr const char* kLoadModalHandlerStrict =
@@ -74,16 +68,17 @@ constexpr const char* kLoadModalHandlerRelaxed =
 
 constexpr const char* kRenderSlotRowStrict =
     "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F1 45 0F B6 F8 48 8B FA 48 8B D9";
+    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F1 45 0F B6 E0 48 8B FA 48 8B D9";
 constexpr const char* kRenderSlotRowRelaxed =
     "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00";
 
 constexpr const char* kSetControlTextStrict =
-    "48 89 5C 24 10 48 89 74 24 18 55 57 41 56 48 8D AC 24 80 F0 FF FF B8 80 10 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 48 8B F1 48 8B 81 A8 00 00 00 48 85 C0 74 ?? 48 8B 48 08 48 85 C9";
+    "48 85 D2 0F 84 ?? ?? ?? ?? 44 88 44 24 18 48 89 54 24 10 48 89 4C 24 08 "
+    "55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 38 F0 FF FF B8 C8 10 00 00 "
+    "E8 ?? ?? ?? ?? 48 2B E0 41 0F B6 F0 48 8B FA 48 8B D9";
 constexpr const char* kSetControlTextRelaxed =
-    "48 89 5C 24 10 48 89 74 24 18 55 57 41 56 48 8D AC 24 80 F0 FF FF B8 80 10 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 48 8B F1";
+    "48 85 D2 0F 84 ?? ?? ?? ?? 44 88 44 24 18 48 89 54 24 10 48 89 4C 24 08 "
+    "55 53 56 57 41 54 41 55 41 56 41 57";
 
 constexpr std::array<Definition, static_cast<std::size_t>(SymbolId::Count)> kCatalog{{
     {SymbolId::DirectLocalSave, "DirectLocalSave", health::FeatureId::CoreSave, true, 0, {kDirectLocalSaveStrict, kDirectLocalSaveRelaxed}},
@@ -91,7 +86,6 @@ constexpr std::array<Definition, static_cast<std::size_t>(SymbolId::Count)> kCat
     {SymbolId::UiSaveRequest, "UiSaveRequest", health::FeatureId::CoreSave, false, 0, {kUiSaveRequestStrict, kUiSaveRequestRelaxed}},
     {SymbolId::SaveServiceTick, "SaveServiceTick", health::FeatureId::CoreSave, false, 0, {kSaveServiceTickStrict, kSaveServiceTickRelaxed}},
     {SymbolId::SaveServiceDriver, "SaveServiceDriver", health::FeatureId::CoreSave, true, -0x20, {kSaveServiceDriverStrict, kSaveServiceDriverRelaxed}},
-    {SymbolId::ServiceCommandBuild, "ServiceCommandBuild", health::FeatureId::CoreSave, false, -0x2B2, {kServiceCommandBuildStrict, kServiceCommandBuildRelaxed}},
     {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", health::FeatureId::CoreLoad, true, 0, {kInGameMenuLoadCoreStrict, kInGameMenuLoadCoreRelaxed}},
     {SymbolId::BuildVisibleMap, "BuildVisibleMap", health::FeatureId::LoadUi, false, 0, {kBuildVisibleMapStrict, kBuildVisibleMapRelaxed}},
     {SymbolId::LoadSelectedRefresh, "LoadSelectedRefresh", health::FeatureId::LoadUi, false, 0, {kLoadSelectedRefreshStrict, kLoadSelectedRefreshRelaxed}},

@@ -17,10 +17,10 @@ using RenderSlotRowFn = std::int64_t(__fastcall*)(
     char,
     char,
     char);
-using SetControlTextFn = std::int64_t(__fastcall*)(std::uint64_t, const char*);
+using SetControlTextFn = void(__fastcall*)(std::uint64_t, const char*, unsigned char);
 
-constexpr std::ptrdiff_t kRowOffsetTypeText = 0x368;
-constexpr std::ptrdiff_t kRowOffsetIndexName = 0x370;
+constexpr std::ptrdiff_t kRowOffsetTypeText = 0x370;
+constexpr std::ptrdiff_t kRowOffsetIndexName = 0x378;
 
 RenderSlotRowFn g_render_slot_row_original = nullptr;
 SetControlTextFn g_set_control_text = nullptr;
@@ -46,7 +46,7 @@ void SetRowControlText(std::uint64_t row_script, std::ptrdiff_t offset, const ch
     __try {
         const std::uint64_t control = *reinterpret_cast<const std::uint64_t*>(row_script + offset);
         if (control != 0) {
-            g_set_control_text(control, text);
+            g_set_control_text(control, text, 0);
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         log::Write("[load-ui] set row text failed row_script=%p offset=0x%zX code=0x%08lX\n",
