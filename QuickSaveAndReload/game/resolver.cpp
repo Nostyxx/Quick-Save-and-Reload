@@ -499,7 +499,7 @@ std::uintptr_t TryResolveGameStateGlobalFromBuildVisibleMap() {
                 || bytes[offset + 7] != 0x48
                 || bytes[offset + 8] != 0x8B
                 || bytes[offset + 9] != 0x88
-                || bytes[offset + 10] != 0xB0
+                || (bytes[offset + 10] != 0xB0 && bytes[offset + 10] != 0xB8)
                 || bytes[offset + 11] != 0x00
                 || bytes[offset + 12] != 0x00
                 || bytes[offset + 13] != 0x00) {

@@ -46,9 +46,28 @@ bool TryBuildBridge(std::uintptr_t site) {
 
     std::uint32_t outer_offset = 0;
     std::uint32_t manager_offset = 0;
+    std::size_t manager_load = 0;
     __try {
-        outer_offset = static_cast<std::uint32_t>(*(p + 10));
-        std::memcpy(&manager_offset, p + 14, sizeof(manager_offset));
+        if (p[7] != 0x48 || p[8] != 0x8B) {
+            return false;
+        }
+
+        const std::uint8_t outer_modrm = p[9];
+        if (outer_modrm == 0x48) {
+            outer_offset = p[10];
+            manager_load = 11;
+        } else if (outer_modrm == 0x88) {
+            std::memcpy(&outer_offset, p + 10, sizeof(outer_offset));
+            manager_load = 14;
+        } else {
+            return false;
+        }
+
+        if (p[manager_load] != 0x48 || p[manager_load + 1] != 0x8B
+            || p[manager_load + 2] != 0x99) {
+            return false;
+        }
+        std::memcpy(&manager_offset, p + manager_load + 3, sizeof(manager_offset));
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
@@ -56,7 +75,7 @@ bool TryBuildBridge(std::uintptr_t site) {
     std::uintptr_t create_fn = 0;
     std::uintptr_t push_fn = 0;
     std::uintptr_t release_fn = 0;
-    for (std::size_t k = 18; k + 8 <= 0x90; ++k) {
+    for (std::size_t k = manager_load + 7; k + 8 <= 0x90; ++k) {
         if (create_fn == 0
             && p[k + 0] == 0x48 && p[k + 1] == 0x8B && p[k + 2] == 0xC8
             && p[k + 3] == 0xE8) {
@@ -129,8 +148,6 @@ bool ResolveBridge() {
         for (std::size_t offset = 0; offset + 0x90 <= size; ++offset) {
             const auto* p = mem + offset;
             if (p[0] != 0x48 || p[1] != 0x8B || p[2] != 0x05) continue;
-            if (p[7] != 0x48 || p[8] != 0x8B || p[9] != 0x48) continue;
-            if (p[11] != 0x48 || p[12] != 0x8B || p[13] != 0x99) continue;
             if (TryBuildBridge(section_base + offset)) {
                 return true;
             }

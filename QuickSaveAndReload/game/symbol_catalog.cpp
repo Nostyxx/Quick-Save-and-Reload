@@ -40,10 +40,10 @@ constexpr const char* kSaveServiceDriverRelaxed =
 
 constexpr const char* kInGameMenuLoadCoreStrict =
     "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
-    "40 38 B1 C2 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9 02 76 ?? 41 8D 41 9C 83 F8 08";
+    "40 38 B1 A0 0C 00 00 0F 84 ?? ?? ?? ?? 41 83 F9 02 76 ?? 41 8D 41 9C 83 F8 08";
 constexpr const char* kInGameMenuLoadCoreRelaxed =
     "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 81 EC D0 01 00 00 48 89 D3 48 89 CF 31 F6 89 74 24 20 "
-    "40 38 B1 C2 0C 00 00";
+    "40 38 B1 A0 0C 00 00";
 
 constexpr const char* kBuildVisibleMapStrict =
     "48 85 D2 0F 84 ?? ?? ?? ?? 48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 "

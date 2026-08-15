@@ -7,6 +7,7 @@ namespace qsr::quick_slots {
 namespace {
 
 constexpr std::size_t kSaveRecordSize = 0x58;
+constexpr std::ptrdiff_t kGameStateSaveCatalogOffset = 0xB8;
 
 int g_first_slot = 108;
 int g_slot_count = 1;
@@ -32,7 +33,9 @@ std::uint64_t GetSaveCatalog() {
     __try {
         const auto* game_state_global = reinterpret_cast<const std::uint64_t*>(g_game_state_global);
         const std::uint64_t game_state = *game_state_global;
-        return game_state != 0 ? *reinterpret_cast<const std::uint64_t*>(game_state + 0xB0) : 0;
+        return game_state != 0
+            ? *reinterpret_cast<const std::uint64_t*>(game_state + kGameStateSaveCatalogOffset)
+            : 0;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return 0;
     }
