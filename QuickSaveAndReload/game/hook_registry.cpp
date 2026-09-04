@@ -23,6 +23,7 @@ bool g_save_service_runtime_installed = false;
 bool g_hotkey_service_started = false;
 bool g_load_runtime_installed = false;
 bool g_load_ui_runtime_installed = false;
+bool g_toast_ui_hook_installed = false;
 
 void ShutdownInstalledRuntimes() {
     if (g_hotkey_service_started) {
@@ -44,6 +45,10 @@ void ShutdownInstalledRuntimes() {
     if (g_save_runtime_installed) {
         save_runtime::Shutdown();
         g_save_runtime_installed = false;
+    }
+    if (g_toast_ui_hook_installed) {
+        toast::ShutdownUiHook();
+        g_toast_ui_hook_installed = false;
     }
     if (g_min_hook_initialized) {
         MH_Uninitialize();
@@ -71,7 +76,7 @@ bool Prepare(const config::Settings& settings) {
     health::Set(health::FeatureId::Input, health::State::Disabled,
         "excluded until release action paths are installed");
 
-    log::Write("[hooks] mode=save-worker-idle-f5-dispatch vk=%d\n",
+    log::Write("[hooks] mode=save-thread-wait-f5-dispatch vk=%d\n",
         settings.quick_save_vk);
 
     if (!resolver::ValidateDirectLocalSaveRuntime()
@@ -90,6 +95,14 @@ bool Prepare(const config::Settings& settings) {
         return false;
     }
     g_min_hook_initialized = true;
+
+    if (toast::Ready()) {
+        g_toast_ui_hook_installed = toast::InstallUiHook();
+        if (!g_toast_ui_hook_installed) {
+            health::Set(health::FeatureId::Toast, health::State::Disabled,
+                "native toast UI dispatch hook unavailable");
+        }
+    }
 
     g_save_runtime_installed = save_runtime::Install({});
     if (!g_save_runtime_installed) {
@@ -153,7 +166,7 @@ bool Prepare(const config::Settings& settings) {
     }
 
     health::Set(health::FeatureId::CoreSave, health::State::Candidate,
-        "F5 native save dispatch active on save-worker idle boundary");
+        "F5 native save dispatch active on captured save thread");
     health::Set(health::FeatureId::Input, health::State::Candidate,
         "keyboard/controller quick-save and quick-load requests active");
     return true;

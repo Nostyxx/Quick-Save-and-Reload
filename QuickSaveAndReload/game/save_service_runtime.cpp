@@ -20,14 +20,13 @@ SaveServiceDriverFn g_driver_original = nullptr;
 WaitForSingleObjectFn g_wait_original = nullptr;
 std::uintptr_t g_driver_target = 0;
 std::uintptr_t g_wait_target = 0;
-std::uintptr_t g_wait_return_address = 0;
 std::atomic<std::uintptr_t> g_last_service_object{0};
 std::atomic<DWORD> g_last_driver_thread_id{0};
 std::atomic<std::uint32_t> g_driver_capture_count{0};
-std::atomic<std::uint32_t> g_wait_timeout_count{0};
+std::atomic<std::uint32_t> g_scheduler_dispatch_count{0};
 bool g_enable_quick_save_dispatch = false;
 
-constexpr DWORD kSaveQueuePollMilliseconds = 25;
+constexpr DWORD kPendingWaitMaximumMs = 25;
 
 bool CreateHookRaw(const char* name, std::uintptr_t target, LPVOID detour, LPVOID* original) {
     const MH_STATUS status = MH_CreateHook(reinterpret_cast<LPVOID>(target), detour, original);
@@ -60,6 +59,36 @@ void RemoveHookIfPresent(std::uintptr_t target) {
     }
 }
 
+bool TryDispatchQuickSave(const char* source) {
+    if (!g_enable_quick_save_dispatch || !hotkeys::HasQuickSaveRequest()) {
+        return false;
+    }
+
+    const std::uintptr_t actor = g_last_service_object.load();
+    const DWORD capture_thread_id = g_last_driver_thread_id.load();
+    const DWORD current_thread_id = GetCurrentThreadId();
+    if (actor == 0 || capture_thread_id == 0 || current_thread_id != capture_thread_id) {
+        log::Write("[quick-save] dispatch blocked source=%s actor=%p capture_tid=%lu current_tid=%lu\n",
+            source != nullptr ? source : "<null>",
+            reinterpret_cast<void*>(actor),
+            static_cast<unsigned long>(capture_thread_id),
+            static_cast<unsigned long>(current_thread_id));
+        return false;
+    }
+
+    if (!hotkeys::TakeQuickSaveRequest()) {
+        return false;
+    }
+
+    const int selected_slot = quick_slots::SelectSaveSlot();
+    log::Write("[quick-save] dispatch source=%s path=prepared-local-save actor=%p slot=%d tid=%lu reason=quick-slot-rotation\n",
+        source != nullptr ? source : "<null>",
+        reinterpret_cast<void*>(actor),
+        selected_slot,
+        static_cast<unsigned long>(current_thread_id));
+    return save_runtime::InvokeQuickSave(actor, selected_slot, source);
+}
+
 std::uintptr_t ResolveExportAddress(const wchar_t* module_name, const char* export_name) {
     HMODULE module = GetModuleHandleW(module_name);
     if (module == nullptr) {
@@ -68,36 +97,6 @@ std::uintptr_t ResolveExportAddress(const wchar_t* module_name, const char* expo
     return module != nullptr
         ? reinterpret_cast<std::uintptr_t>(GetProcAddress(module, export_name))
         : 0;
-}
-
-void TryDispatchQuickSave(const char* source) {
-    if (!g_enable_quick_save_dispatch || !hotkeys::HasQuickSaveRequest()) {
-        return;
-    }
-
-    const DWORD thread_id = GetCurrentThreadId();
-    const DWORD driver_thread_id = g_last_driver_thread_id.load();
-    const std::uintptr_t actor = g_last_service_object.load();
-    if (actor == 0 || driver_thread_id == 0 || thread_id != driver_thread_id) {
-        log::Write("[quick-save] pending blocked source=%s actor=%p save_tid=%lu current_tid=%lu\n",
-            source != nullptr ? source : "<null>",
-            reinterpret_cast<void*>(actor),
-            static_cast<unsigned long>(driver_thread_id),
-            static_cast<unsigned long>(thread_id));
-        return;
-    }
-
-    if (!hotkeys::TakeQuickSaveRequest()) {
-        return;
-    }
-
-    const int selected_slot = quick_slots::SelectSaveSlot();
-    log::Write("[quick-save] dispatch source=%s path=prepared-local-save actor=%p slot=%d tid=%lu reason=quick-slot-rotation\n",
-        source != nullptr ? source : "<null>",
-        reinterpret_cast<void*>(actor),
-        selected_slot,
-        static_cast<unsigned long>(thread_id));
-    save_runtime::InvokeQuickSave(actor, selected_slot, source);
 }
 
 std::int64_t __fastcall SaveServiceDriverHook(std::int64_t self, std::int64_t service_object) {
@@ -115,26 +114,26 @@ std::int64_t __fastcall SaveServiceDriverHook(std::int64_t self, std::int64_t se
 }
 
 DWORD WINAPI WaitForSingleObjectHook(HANDLE handle, DWORD milliseconds) {
-    const auto return_address = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-    const bool at_save_queue_wait = g_enable_quick_save_dispatch
-        && g_wait_return_address != 0
-        && return_address == g_wait_return_address
-        && milliseconds == INFINITE
-        && GetCurrentThreadId() == g_last_driver_thread_id.load()
+    const DWORD current_thread_id = GetCurrentThreadId();
+    const bool pending_on_save_thread = g_enable_quick_save_dispatch
+        && hotkeys::HasQuickSaveRequest()
+        && current_thread_id == g_last_driver_thread_id.load()
         && g_last_service_object.load() != 0;
+    const DWORD effective_timeout = pending_on_save_thread && milliseconds > kPendingWaitMaximumMs
+        ? kPendingWaitMaximumMs
+        : milliseconds;
+    const DWORD result = g_wait_original(handle, effective_timeout);
 
-    const DWORD result = g_wait_original(
-        handle,
-        at_save_queue_wait ? kSaveQueuePollMilliseconds : milliseconds);
-    if (at_save_queue_wait && result == WAIT_TIMEOUT) {
-        const std::uint32_t timeout_count = g_wait_timeout_count.fetch_add(1) + 1;
-        if (timeout_count == 1) {
-            log::Write("[save-service] save-worker idle boundary active return=%p tid=%lu poll_ms=%lu\n",
-                reinterpret_cast<void*>(return_address),
-                static_cast<unsigned long>(GetCurrentThreadId()),
-                static_cast<unsigned long>(kSaveQueuePollMilliseconds));
-        }
-        TryDispatchQuickSave("save-worker-idle");
+    if (pending_on_save_thread) {
+        const std::uint32_t dispatch_count = g_scheduler_dispatch_count.fetch_add(1) + 1;
+        log::Write("[save-service] save-thread scheduler count=%u return=%p wait_ms=%lu effective_ms=%lu result=0x%08lX tid=%lu\n",
+            dispatch_count,
+            _ReturnAddress(),
+            static_cast<unsigned long>(milliseconds),
+            static_cast<unsigned long>(effective_timeout),
+            static_cast<unsigned long>(result),
+            static_cast<unsigned long>(current_thread_id));
+        TryDispatchQuickSave("save-thread-wait");
     }
     return result;
 }
@@ -146,27 +145,20 @@ bool Install(const Options& options) {
     g_wait_target = options.enable_quick_save_dispatch
         ? ResolveExportAddress(L"kernel32.dll", "WaitForSingleObject")
         : 0;
-    g_wait_return_address = options.enable_quick_save_dispatch
-        ? resolver::TryResolveSaveQueueWaitBoundary()
-        : 0;
-    if (g_driver_target == 0
-        || (options.enable_quick_save_dispatch
-            && (g_wait_target == 0 || g_wait_return_address == 0))) {
-        log::Write("[save-service] install blocked driver=%p wait=%p wait_return=%p dispatch=%d\n",
+    if (g_driver_target == 0 || (options.enable_quick_save_dispatch && g_wait_target == 0)) {
+        log::Write("[save-service] install blocked driver=%p wait=%p dispatch=%d\n",
             reinterpret_cast<void*>(g_driver_target),
             reinterpret_cast<void*>(g_wait_target),
-            reinterpret_cast<void*>(g_wait_return_address),
             options.enable_quick_save_dispatch ? 1 : 0);
         g_driver_target = 0;
         g_wait_target = 0;
-        g_wait_return_address = 0;
         return false;
     }
 
     g_last_service_object.store(0);
     g_last_driver_thread_id.store(0);
     g_driver_capture_count.store(0);
-    g_wait_timeout_count.store(0);
+    g_scheduler_dispatch_count.store(0);
     g_enable_quick_save_dispatch = options.enable_quick_save_dispatch;
 
     if (!CreateHookRaw(
@@ -188,23 +180,21 @@ bool Install(const Options& options) {
         return false;
     }
 
-    // The wait hook must be live before the driver enters its long-running loop.
     if ((g_wait_target != 0 && !EnableHookRaw("WaitForSingleObject", g_wait_target))
         || !EnableHookRaw("SaveServiceDriver", g_driver_target)) {
         Shutdown();
         return false;
     }
 
-    const auto game_base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
-    log::Write("[save-service] installed driver=%p wait=%p wait_return=%p wait_return_rva=0x%llX poll_ms=%lu dispatch=%d\n",
+    log::Write("[save-service] installed driver=%p wait=%p dispatch=save-thread-wait enabled=%d\n",
         reinterpret_cast<void*>(g_driver_target),
         reinterpret_cast<void*>(g_wait_target),
-        reinterpret_cast<void*>(g_wait_return_address),
-        static_cast<unsigned long long>(
-            game_base != 0 ? g_wait_return_address - game_base : 0),
-        static_cast<unsigned long>(kSaveQueuePollMilliseconds),
         g_enable_quick_save_dispatch ? 1 : 0);
     return true;
+}
+
+bool DispatchPendingQuickSave(const char* source) {
+    return TryDispatchQuickSave(source);
 }
 
 bool LatestCapture(CapturedContext& capture) {
@@ -220,11 +210,10 @@ void Shutdown() {
     g_wait_original = nullptr;
     g_driver_target = 0;
     g_wait_target = 0;
-    g_wait_return_address = 0;
     g_last_service_object.store(0);
     g_last_driver_thread_id.store(0);
     g_driver_capture_count.store(0);
-    g_wait_timeout_count.store(0);
+    g_scheduler_dispatch_count.store(0);
     g_enable_quick_save_dispatch = false;
 }
 

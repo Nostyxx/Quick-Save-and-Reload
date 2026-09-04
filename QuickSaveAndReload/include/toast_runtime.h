@@ -6,6 +6,8 @@ namespace qsr::toast {
 
 bool Initialize(bool enabled);
 bool Ready();
+bool InstallUiHook();
+void ShutdownUiHook();
 void Show(const char* message);
 void Show(text::TextId id);
 void ShowFormatted(text::TextId id, unsigned int value);

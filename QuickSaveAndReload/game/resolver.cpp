@@ -149,8 +149,13 @@ bool IsSaveQueueWaitCall(
         0xBA, 0xFF, 0xFF, 0xFF, 0xFF,  // mov edx, INFINITE
         0x49, 0x8B, 0x0F               // mov rcx, [r15]
     };
+    constexpr std::uint8_t kPollingWaitSetup[] = {
+        0xBA, 0x10, 0x00, 0x00, 0x00,  // mov edx, 16
+        0x48, 0x8B, 0x0F               // mov rcx, [rdi]
+    };
     constexpr std::uint8_t kResultTest[] = {0x8B, 0xD8, 0x85, 0xC0};
     constexpr std::uint8_t kSemaphoreDecrement[] = {0xF0, 0x41, 0xFF, 0x4F, 0x10};
+    constexpr std::uint8_t kPollingSemaphoreDecrement[] = {0xF0, 0xFF, 0x4F, 0x10};
     constexpr std::uint8_t kWaitTimeoutCompare[] = {0x3D, 0x02, 0x01, 0x00, 0x00};
 
     if (call_offset < kLookBehind || call_offset + kCallSize + kLookAhead > section_size) {
@@ -173,9 +178,13 @@ bool IsSaveQueueWaitCall(
 
     const auto* before = call - kLookBehind;
     const auto* after = call + kCallSize;
-    return ContainsBytes(before, kLookBehind, kInfiniteWaitSetup, std::size(kInfiniteWaitSetup))
+    const bool recognized_wait =
+        ContainsBytes(before, kLookBehind, kInfiniteWaitSetup, std::size(kInfiniteWaitSetup))
+        || ContainsBytes(before, kLookBehind, kPollingWaitSetup, std::size(kPollingWaitSetup));
+    return recognized_wait
         && ContainsBytes(after, 12, kResultTest, std::size(kResultTest))
-        && ContainsBytes(after, kLookAhead, kSemaphoreDecrement, std::size(kSemaphoreDecrement))
+        && (ContainsBytes(after, kLookAhead, kSemaphoreDecrement, std::size(kSemaphoreDecrement))
+            || ContainsBytes(after, kLookAhead, kPollingSemaphoreDecrement, std::size(kPollingSemaphoreDecrement)))
         && ContainsBytes(after, kLookAhead, kWaitTimeoutCompare, std::size(kWaitTimeoutCompare));
 }
 
@@ -399,7 +408,7 @@ bool ValidateSaveServiceTickRuntime() {
 
 bool ValidateSaveServiceRuntime() {
     Result& result = g_results[static_cast<std::size_t>(symbols::SymbolId::SaveServiceDriver)];
-    if (result.status != Status::Candidate || result.address == 0) {
+    if (result.status != Status::Candidate || result.matched_pattern != 1 || result.address == 0) {
         log::Write("[resolver] SaveServiceDriver    status=%s validation=blocked reason=ida-verified-entry-required\n",
             StatusName(result.status));
         return false;

@@ -12,6 +12,7 @@ struct CapturedContext {
 };
 
 bool Install(const Options& options);
+bool DispatchPendingQuickSave(const char* source);
 bool LatestCapture(CapturedContext& capture);
 void Shutdown();
 

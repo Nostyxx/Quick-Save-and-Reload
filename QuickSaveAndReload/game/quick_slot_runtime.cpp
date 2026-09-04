@@ -6,7 +6,7 @@
 namespace qsr::quick_slots {
 namespace {
 
-constexpr std::size_t kSaveRecordSize = 0x58;
+constexpr std::size_t kSaveRecordSize = 0x68;
 constexpr std::ptrdiff_t kGameStateSaveCatalogOffset = 0xB8;
 
 int g_first_slot = 108;

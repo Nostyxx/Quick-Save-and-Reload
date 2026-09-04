@@ -30,10 +30,10 @@ constexpr std::uint32_t kMaxVisibleRows = 64;
 constexpr std::ptrdiff_t kNewRootOffsetCatalogListWidget = 0x158;
 constexpr std::ptrdiff_t kNewRootOffsetVisibleListWidget = 0x160;
 constexpr std::ptrdiff_t kNewRootOffsetActiveLoadModal = 0x1E8;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexMap = 0x1F8;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexCount = 0x200;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleRecords = 0x208;
-constexpr std::ptrdiff_t kNewRootOffsetVisibleRecordCount = 0x210;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexMap = 0x1F0;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleIndexCount = 0x1F8;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleRecords = 0x200;
+constexpr std::ptrdiff_t kNewRootOffsetVisibleRecordCount = 0x208;
 constexpr std::ptrdiff_t kNewListWidgetSelectedRowOffset = 0x120;
 constexpr std::uint32_t kNewVisibleRecordSize = 0x50;
 
@@ -53,6 +53,8 @@ std::atomic<DWORD> g_last_thread_id{0};
 std::atomic<bool> g_quick_load_confirm_modal_active{false};
 std::atomic<std::uintptr_t> g_quick_load_confirm_root{0};
 std::atomic<std::uintptr_t> g_quick_load_confirm_modal{0};
+std::uintptr_t g_last_reorder_log_root = 0;
+ULONGLONG g_last_reorder_log_tick = 0;
 bool g_install_selected_refresh = true;
 
 bool IsLikelyLoadUiRoot(std::uintptr_t root) {
@@ -363,12 +365,17 @@ bool RewriteNewVisibleIndexMapForQuickSlots(std::uintptr_t root) {
             visible_map[row] = rewritten_map[row];
         }
 
-        if (changed) {
+        const ULONGLONG now = GetTickCount64();
+        if (changed
+            && (g_last_reorder_log_root != root
+                || now - g_last_reorder_log_tick >= 1000)) {
             log::Write("[load-ui] reordered new visible index map root=%p quick_count=%d visible_count=%u first_record=%d\n",
                 reinterpret_cast<void*>(root),
                 quick_record_count,
                 visible_count,
                 rewritten_map[0]);
+            g_last_reorder_log_root = root;
+            g_last_reorder_log_tick = now;
         }
         return changed;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -657,6 +664,8 @@ bool Install(const Options& options) {
     g_quick_load_confirm_modal_active.store(false);
     g_quick_load_confirm_root.store(0);
     g_quick_load_confirm_modal.store(0);
+    g_last_reorder_log_root = 0;
+    g_last_reorder_log_tick = 0;
     g_install_selected_refresh = options.install_selected_refresh;
 
     if (!CreateHookRaw(
@@ -965,6 +974,8 @@ void Shutdown() {
     g_quick_load_confirm_modal_active.store(false);
     g_quick_load_confirm_root.store(0);
     g_quick_load_confirm_modal.store(0);
+    g_last_reorder_log_root = 0;
+    g_last_reorder_log_tick = 0;
 }
 
 }  // namespace qsr::load_runtime
