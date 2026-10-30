@@ -53,17 +53,17 @@ constexpr const char* kInGameMenuLoadCoreRelaxed =
 
 constexpr const char* kBuildVisibleMapStrict =
     "48 85 D2 0F 84 ?? ?? ?? ?? 48 89 5C 24 08 48 89 74 24 18 48 89 7C 24 20 55 41 56 41 57 "
-    "48 8D 6C 24 D0 48 81 EC 30 01 00 00 45 0F B6 F9 41 8B F8 4C 8B F1 33 DB";
+    "48 8D 6C 24 D0 48 81 EC 30 01 00 00 45 0F B6 F9 41 8B F8 ?? 8B F1 33 DB";
 constexpr const char* kBuildVisibleMapRelaxed =
     "48 85 D2 0F 84 ?? ?? ?? ?? 48 89 5C 24 08 48 89 74 24 18 48 89 7C 24 20 55 41 56 41 57 "
     "48 8D 6C 24 D0 48 81 EC 30 01 00 00";
 
 constexpr const char* kLoadSelectedRefreshStrict =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 D9 FF FF B8 50 27 00 00 "
+    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ?? ?? FF FF B8 ?? ?? 00 00 "
     "E8 ?? ?? ?? ?? 48 2B E0 48 8B D9 45 33 ED 44 89 6C 24 30 48 8B 81 60 01 00 00 "
     "44 8B B0 20 01 00 00";
 constexpr const char* kLoadSelectedRefreshRelaxed =
-    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 D9 FF FF B8 50 27 00 00 "
+    "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ?? ?? FF FF B8 ?? ?? 00 00 "
     "E8 ?? ?? ?? ?? 48 2B E0 48 8B D9";
 
 constexpr const char* kLoadModalHandlerStrict =
@@ -72,16 +72,18 @@ constexpr const char* kLoadModalHandlerStrict =
 constexpr const char* kLoadModalHandlerRelaxed =
     "40 53 48 83 EC 20 4D 89 CA 48 89 CB 48 39 91 58 01 00 00";
 
+// 1.0.0.3392: the prologue now spills r8b and the register allocation changed.
 constexpr const char* kRenderSlotRowStrict =
-    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 F1 45 0F B6 F8 48 8B FA 48 8B D9";
+    "48 89 5C 24 20 44 88 44 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ?? ?? FF FF "
+    "B8 ?? ?? 00 00 E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 E9 41 0F B6 F0 4C 8B FA 48 8B F9";
 constexpr const char* kRenderSlotRowRelaxed =
-    "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 D0 EE FF FF B8 30 12 00 00";
+    "48 89 5C 24 20 44 88 44 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 ?? ?? FF FF "
+    "B8 ?? ?? 00 00";
 
 constexpr const char* kSetControlTextStrict =
     "48 85 D2 0F 84 ?? ?? ?? ?? 44 88 44 24 18 48 89 54 24 10 48 89 4C 24 08 "
     "55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 38 F0 FF FF B8 C8 10 00 00 "
-    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 E0 48 8B F2 48 8B D9";
+    "E8 ?? ?? ?? ?? 48 2B E0 45 0F B6 E0 48 8B F2 ?? 8B ??";
 constexpr const char* kSetControlTextRelaxed =
     "48 85 D2 0F 84 ?? ?? ?? ?? 44 88 44 24 18 48 89 54 24 10 48 89 4C 24 08 "
     "55 53 56 57 41 54 41 55 41 56 41 57";

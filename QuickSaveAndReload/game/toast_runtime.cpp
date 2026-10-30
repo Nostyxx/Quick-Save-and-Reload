@@ -24,6 +24,7 @@ NativeToastReleaseStringFn g_release_string = nullptr;
 NativeToastShowAlertFn g_show_alert = nullptr;
 ToastUiEventFn g_ui_event_original = nullptr;
 std::uintptr_t g_ui_event_target = 0;
+std::ptrdiff_t g_ui_root_vtable_offset = 0;
 std::mutex g_queue_mutex;
 std::atomic<bool> g_message_queued{false};
 char g_queued_message[512] = {};
@@ -94,6 +95,74 @@ std::uintptr_t ScanUniqueExecutablePattern(
     return hits == 1 ? first : 0;
 }
 
+// The game's own showAlert callers fetch the UI root with a virtual call right
+// before the call: call [rax+disp32]; mov r8d,ebx; mov rdx,rdi; mov rcx,rax;
+// call showAlert. The slot moved from 0x110 to 0x118 in 1.0.0.3392, so read it
+// from those call sites instead of hard-coding it. All hits must agree.
+std::ptrdiff_t ResolveUiRootVtableOffset(HMODULE module, std::uintptr_t show_alert) {
+    constexpr std::uint8_t kCallSitePattern[] = {
+        0xFF, 0x90, 0, 0, 0x00, 0x00,
+        0x44, 0x8B, 0xC3, 0x48, 0x8B, 0xD7, 0x48, 0x8B, 0xC8, 0xE8
+    };
+    constexpr std::size_t kCallSiteSize = std::size(kCallSitePattern) + 4;
+
+    auto* base = reinterpret_cast<std::uint8_t*>(module);
+    auto* dos = reinterpret_cast<IMAGE_DOS_HEADER*>(base);
+    if (module == nullptr || show_alert == 0 || dos->e_magic != IMAGE_DOS_SIGNATURE) {
+        return 0;
+    }
+    auto* nt = reinterpret_cast<IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) {
+        return 0;
+    }
+
+    std::uint32_t found = 0;
+    std::size_t hits = 0;
+    IMAGE_SECTION_HEADER* section = IMAGE_FIRST_SECTION(nt);
+    for (unsigned short i = 0; i < nt->FileHeader.NumberOfSections; ++i, ++section) {
+        if ((section->Characteristics & IMAGE_SCN_MEM_EXECUTE) == 0
+            || section->Misc.VirtualSize < kCallSiteSize) {
+            continue;
+        }
+        const auto section_base = reinterpret_cast<std::uintptr_t>(base) + section->VirtualAddress;
+        const auto* memory = reinterpret_cast<const std::uint8_t*>(section_base);
+        const std::size_t last = section->Misc.VirtualSize - kCallSiteSize;
+        for (std::size_t offset = 0; offset <= last; ++offset) {
+            const std::uint8_t* p = memory + offset;
+            if (p[0] != 0xFF || p[1] != 0x90 || p[4] != 0x00 || p[5] != 0x00) {
+                continue;
+            }
+            if (std::memcmp(p + 6, kCallSitePattern + 6, std::size(kCallSitePattern) - 6) != 0) {
+                continue;
+            }
+
+            std::int32_t call_displacement = 0;
+            std::memcpy(&call_displacement, p + std::size(kCallSitePattern), sizeof(call_displacement));
+            const std::uintptr_t call_target = section_base + offset + kCallSiteSize + call_displacement;
+            if (call_target != show_alert) {
+                continue;
+            }
+
+            std::uint32_t slot_offset = 0;
+            std::memcpy(&slot_offset, p + 2, sizeof(slot_offset));
+            if (slot_offset == 0 || (slot_offset % sizeof(void*)) != 0) {
+                return 0;
+            }
+            if (found != 0 && found != slot_offset) {
+                log::Write("[toast] UI root vtable slot ambiguous first=0x%X other=0x%X\n", found, slot_offset);
+                return 0;
+            }
+            found = slot_offset;
+            ++hits;
+        }
+    }
+
+    if (found != 0) {
+        log::Write("[toast] UI root vtable slot=0x%X call_sites=%zu\n", found, hits);
+    }
+    return static_cast<std::ptrdiff_t>(found);
+}
+
 bool TryResolveAlertBridge(HMODULE module) {
     constexpr std::uint8_t kShowAlertPattern[] = {
         0x48, 0x89, 0x5C, 0x24, 0x08, 0x57, 0x48, 0x83, 0xEC, 0x20,
@@ -107,17 +176,17 @@ bool TryResolveAlertBridge(HMODULE module) {
         0, 0, 0, 0, 0x0F, 0x84, 0, 0, 0, 0, 0xC3
     };
     constexpr char kUiEventMask[] = "xxxxxxxxxxx????xx????x";
+    // Prologue up to the first field test only: 1.0.0.3392 moved the tested
+    // field (+0x3C0 -> +0x3E0) and re-encoded the float loads after it. The
+    // ui_event thunk's je must land here, which keeps the match unambiguous.
     constexpr std::uint8_t kMinimapUiPattern[] = {
         0x48, 0x89, 0x5C, 0x24, 0,
         0x48, 0x89, 0x4C, 0x24, 0,
         0x55, 0x56, 0x57, 0x41, 0x54, 0x41, 0x55, 0x41, 0x56, 0x41, 0x57,
         0x48, 0x8D, 0xAC, 0x24, 0, 0, 0xFF, 0xFF,
         0x48, 0x81, 0xEC, 0, 0x03, 0x00, 0x00,
-        0x48, 0x83, 0xB9, 0xC0, 0x03, 0x00, 0x00, 0x00,
-        0x0F, 0x84, 0, 0, 0x00, 0x00,
-        0xC5, 0xFA, 0x10, 0x99, 0, 0x05, 0x00, 0x00,
-        0x48, 0x8B, 0x42, 0x18,
-        0x44, 0x8B, 0x40, 0x04
+        0x48, 0x83, 0xB9, 0, 0, 0x00, 0x00, 0x00,
+        0x0F, 0x84
     };
     constexpr char kMinimapUiMask[] =
         "xxxx?"
@@ -125,11 +194,8 @@ bool TryResolveAlertBridge(HMODULE module) {
         "xxxxxxxxxxx"
         "xxxx??xx"
         "xxx?xxx"
-        "xxxxxxxx"
-        "xx??xx"
-        "xxxx?xxx"
-        "xxxx"
-        "xxxx";
+        "xxx??xxx"
+        "xx";
     static_assert(sizeof(kShowAlertMask) == sizeof(kShowAlertPattern) + 1);
     static_assert(sizeof(kUiEventMask) == sizeof(kUiEventPattern) + 1);
     static_assert(sizeof(kMinimapUiMask) == sizeof(kMinimapUiPattern) + 1);
@@ -146,11 +212,21 @@ bool TryResolveAlertBridge(HMODULE module) {
         15,
         minimap_ui);
     if (show_alert == 0 || minimap_ui == 0 || ui_event == 0) {
+        log::Write("[toast] AlertSystem bridge unresolved show=%p ui_event=%p minimap=%p\n",
+            reinterpret_cast<void*>(show_alert),
+            reinterpret_cast<void*>(ui_event),
+            reinterpret_cast<void*>(minimap_ui));
+        return false;
+    }
+    const std::ptrdiff_t ui_root_vtable_offset = ResolveUiRootVtableOffset(module, show_alert);
+    if (ui_root_vtable_offset == 0) {
+        log::Write("[toast] AlertSystem bridge unresolved reason=no-ui-root-vtable-slot\n");
         return false;
     }
 
     g_show_alert = reinterpret_cast<NativeToastShowAlertFn>(show_alert);
     g_ui_event_target = ui_event;
+    g_ui_root_vtable_offset = ui_root_vtable_offset;
     log::Write("[toast] AlertSystem bridge resolved show=%p ui_event=%p minimap=%p\n",
         reinterpret_cast<void*>(show_alert),
         reinterpret_cast<void*>(ui_event),
@@ -322,11 +398,15 @@ void* ResolveManager() {
 }
 
 void* ResolveUiRootNoThrow(void* ui_object) {
+    if (g_ui_root_vtable_offset == 0) {
+        return nullptr;
+    }
     __try {
         void** vtable = *reinterpret_cast<void***>(ui_object);
-        if (vtable != nullptr && vtable[34] != nullptr) {
+        const std::size_t slot = static_cast<std::size_t>(g_ui_root_vtable_offset) / sizeof(void*);
+        if (vtable != nullptr && vtable[slot] != nullptr) {
             using GetUiRootFn = void* (__fastcall*)(void*);
-            return reinterpret_cast<GetUiRootFn>(vtable[34])(ui_object);
+            return reinterpret_cast<GetUiRootFn>(vtable[slot])(ui_object);
         }
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return nullptr;
@@ -494,6 +574,7 @@ void Shutdown() {
     g_release_string = nullptr;
     g_show_alert = nullptr;
     g_ui_event_target = 0;
+    g_ui_root_vtable_offset = 0;
     g_message_queued.store(false);
     g_queued_message[0] = '\0';
     g_enabled = false;

@@ -6,7 +6,9 @@
 namespace qsr::quick_slots {
 namespace {
 
-constexpr std::size_t kSaveRecordSize = 0x68;
+// 0x68 before 1.0.0.3392 (see the imul in BuildVisibleMap); slot (+0x0) and
+// timestamp (+0x8) did not move.
+constexpr std::size_t kSaveRecordSize = 0x78;
 constexpr std::ptrdiff_t kGameStateSaveCatalogOffset = 0xB8;
 
 int g_first_slot = 108;
