@@ -28,13 +28,6 @@ constexpr const char* kUiSaveRequestStrict =
 constexpr const char* kUiSaveRequestRelaxed =
     "45 89 CF 4D 89 C6 48 89 D7 48 89 CD 48 8B 71 08 48 8B 86 A0 00 00 00 4C 8B 50 68";
 
-constexpr const char* kSaveServiceTickStrict =
-    "48 89 5C 24 08 44 89 4C 24 20 4C 89 44 24 18 55 56 57 41 54 41 55 41 56 41 57 "
-    "48 8D 6C 24 D9 48 81 EC C0 00 00 00 4C 8B FA 4C 8B 71 08";
-constexpr const char* kSaveServiceTickRelaxed =
-    "48 89 5C 24 08 44 89 4C 24 20 4C 89 44 24 18 55 56 57 41 54 41 55 41 56 41 57 "
-    "48 8D 6C 24 D9 48 81 EC C0 00 00 00";
-
 constexpr const char* kSaveServiceDriverStrict =
     "48 89 5C 24 20 48 89 4C 24 08 55 56 57 41 56 41 57 48 83 EC 50 "
     "48 89 D7 48 8B 02 48 8D 94 24 90 00 00 00 48 89 F9 FF 90 D0 00 00 00 "
@@ -92,7 +85,6 @@ constexpr std::array<Definition, static_cast<std::size_t>(SymbolId::Count)> kCat
     {SymbolId::DirectLocalSave, "DirectLocalSave", health::FeatureId::CoreSave, true, 0, {kDirectLocalSaveStrict, kDirectLocalSaveRelaxed}},
     {SymbolId::PreparedLocalSave, "PreparedLocalSave", health::FeatureId::CoreSave, false, 0, {kPreparedLocalSaveStrict, kPreparedLocalSaveRelaxed}},
     {SymbolId::UiSaveRequest, "UiSaveRequest", health::FeatureId::CoreSave, false, 0, {kUiSaveRequestStrict, kUiSaveRequestRelaxed}},
-    {SymbolId::SaveServiceTick, "SaveServiceTick", health::FeatureId::CoreSave, false, 0, {kSaveServiceTickStrict, kSaveServiceTickRelaxed}},
     {SymbolId::SaveServiceDriver, "SaveServiceDriver", health::FeatureId::CoreSave, true, 0, {kSaveServiceDriverStrict, kSaveServiceDriverRelaxed}},
     {SymbolId::InGameMenuLoadCore, "InGameMenuLoadCore", health::FeatureId::CoreLoad, true, 0, {kInGameMenuLoadCoreStrict, kInGameMenuLoadCoreRelaxed}},
     {SymbolId::BuildVisibleMap, "BuildVisibleMap", health::FeatureId::LoadUi, false, 0, {kBuildVisibleMapStrict, kBuildVisibleMapRelaxed}},

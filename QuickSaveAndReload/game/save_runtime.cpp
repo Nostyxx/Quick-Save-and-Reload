@@ -253,14 +253,6 @@ bool Install(const Options& options) {
     return TryInstallPreparedHook() && TryInstallUiRequestHook();
 }
 
-bool LatestCapture(CapturedCall& capture) {
-    capture.actor = g_last_actor.load();
-    capture.context = g_last_context.load();
-    capture.thread_id = g_last_thread_id.load();
-    capture.slot = g_last_slot.load();
-    return capture.actor != 0 && capture.context != 0 && capture.thread_id != 0;
-}
-
 bool InvokeQuickSave(std::uintptr_t actor, int slot, const char* source) {
     if (g_original == nullptr || actor == 0 || slot < 0) {
         log::Write("[quick-save] source=%s unavailable actor=%p slot=%d original=%p\n",

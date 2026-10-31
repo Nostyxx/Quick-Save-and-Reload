@@ -87,7 +87,6 @@ bool Prepare(const config::Settings& settings) {
     }
     resolver::ValidatePreparedLocalSaveRuntime();
     resolver::ValidateUiSaveRequestRuntime();
-    resolver::ValidateSaveServiceTickRuntime();
 
     const MH_STATUS init_status = MH_Initialize();
     if (init_status != MH_OK && init_status != MH_ERROR_ALREADY_INITIALIZED) {

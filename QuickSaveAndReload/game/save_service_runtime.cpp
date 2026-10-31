@@ -197,12 +197,6 @@ bool DispatchPendingQuickSave(const char* source) {
     return TryDispatchQuickSave(source);
 }
 
-bool LatestCapture(CapturedContext& capture) {
-    capture.actor = g_last_service_object.load();
-    capture.thread_id = g_last_driver_thread_id.load();
-    return capture.actor != 0 && capture.thread_id != 0;
-}
-
 void Shutdown() {
     RemoveHookIfPresent(g_driver_target);
     RemoveHookIfPresent(g_wait_target);

@@ -63,6 +63,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalOptions>/PDBALTPATH:%_PDB% %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -76,6 +77,10 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>NDEBUG;QUICKSAVEANDRELOAD_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="framework.h" />
@@ -94,8 +99,12 @@
     <ClInclude Include="include\symbol_catalog.h" />
     <ClInclude Include="include\text_runtime.h" />
     <ClInclude Include="include\toast_runtime.h" />
+    <ClInclude Include="include\version.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="..\third_party\include\MinHook.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="QuickSaveAndReload.rc" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="app\bootstrap.cpp" />

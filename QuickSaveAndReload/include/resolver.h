@@ -29,7 +29,6 @@ bool HasAllRequiredCandidates(health::FeatureId feature);
 bool ValidateDirectLocalSaveRuntime();
 bool ValidatePreparedLocalSaveRuntime();
 bool ValidateUiSaveRequestRuntime();
-bool ValidateSaveServiceTickRuntime();
 bool ValidateSaveServiceRuntime();
 bool ValidateInGameMenuLoadCoreRuntime();
 bool ValidateBuildVisibleMapRuntime();
@@ -38,7 +37,6 @@ bool ValidateLoadModalHandlerRuntime();
 bool ValidateLoadUiRowRuntime();
 std::uintptr_t ValidatedAddress(symbols::SymbolId id);
 std::uintptr_t TryResolveGameStateGlobalFromBuildVisibleMap();
-std::uintptr_t TryResolveSaveQueueWaitBoundary();
 const char* StatusName(Status status);
 void Reset();
 

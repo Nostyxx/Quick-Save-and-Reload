@@ -8,11 +8,13 @@
 #include "include/runtime_health.h"
 #include "include/text_runtime.h"
 #include "include/toast_runtime.h"
+#include "include/version.h"
 
 namespace qsr {
 namespace {
 
-constexpr const char* kVersion = "1.8.5";
+constexpr const char* kVersion = "1.8.6";
+static_assert(std::string_view(kVersion) == QSR_VERSION_STRING);
 
 std::atomic<bool> g_initialized{false};
 

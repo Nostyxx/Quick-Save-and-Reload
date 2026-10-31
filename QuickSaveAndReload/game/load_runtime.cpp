@@ -745,15 +745,6 @@ bool Install(const Options& options) {
     return true;
 }
 
-bool LatestCapture(CapturedContext& capture) {
-    capture.core_self = g_last_core_self.load();
-    capture.target_key = g_last_target_key.load();
-    capture.slot = g_last_slot.load();
-    capture.ui_root = g_last_ui_root.load();
-    capture.thread_id = g_last_thread_id.load();
-    return capture.core_self != 0 || capture.ui_root != 0;
-}
-
 bool TryOpenQuickLoadConfirmationModal(const char* source) {
     if (g_load_selected_refresh_original == nullptr) {
         log::Write("[quick-load-confirm] unavailable reason=no-selected-refresh source=%s\n",
